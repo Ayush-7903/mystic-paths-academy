@@ -24,6 +24,7 @@ const Dashboard = () => {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isMember, setIsMember] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,7 +53,19 @@ const Dashboard = () => {
       setIsAdmin(true);
     }
 
-    fetchEnrollments(session.user.id);
+    // Check if user is a member
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("is_member")
+      .eq("id", session.user.id)
+      .single();
+    
+    if (profileData?.is_member) {
+      setIsMember(true);
+      fetchEnrollments(session.user.id);
+    } else {
+      setLoading(false);
+    }
   };
 
   const fetchEnrollments = async (userId: string) => {
@@ -126,56 +139,71 @@ const Dashboard = () => {
           </div>
         )}
 
-        <h2 className="text-3xl mb-6">Your Enrolled Courses</h2>
-        
-        {enrollments.length === 0 ? (
+        {!isMember ? (
           <Card className="gradient-card shadow-soft text-center p-12">
             <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-2xl mb-2">No Courses Yet</h3>
+            <h3 className="text-2xl mb-2">Membership Required</h3>
             <p className="text-muted-foreground mb-6">
-              Start your spiritual journey by enrolling in a course
+              Become a member to access all courses and start your spiritual journey
             </p>
-            <Link to="/courses">
-              <Button>Browse Courses</Button>
+            <Link to="/membership">
+              <Button className="shadow-glow">Become a Member</Button>
             </Link>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 gap-6">
-            {enrollments.map((enrollment) => (
-              <Card 
-                key={enrollment.id}
-                className="gradient-card shadow-soft hover:shadow-medium transition-smooth"
-              >
-                <div className="relative h-48 overflow-hidden rounded-t-lg">
-                  <img
-                    src={enrollment.courses.image_url || "/placeholder.svg"}
-                    alt={enrollment.courses.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <CardHeader>
-                  <CardTitle>{enrollment.courses.title}</CardTitle>
-                  <CardDescription className="line-clamp-2">
-                    {enrollment.courses.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Progress</span>
-                      <span>{enrollment.progress}%</span>
-                    </div>
-                    <Progress value={enrollment.progress} />
-                  </div>
-                  <Link to={`/courses/${enrollment.courses.id}`}>
-                    <Button className="w-full">
-                      Continue Course
-                    </Button>
-                  </Link>
-                </CardContent>
+          <>
+            <h2 className="text-3xl mb-6">Your Enrolled Courses</h2>
+            
+            {enrollments.length === 0 ? (
+              <Card className="gradient-card shadow-soft text-center p-12">
+                <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-2xl mb-2">No Courses Yet</h3>
+                <p className="text-muted-foreground mb-6">
+                  Start your spiritual journey by enrolling in a course
+                </p>
+                <Link to="/courses">
+                  <Button>Browse Courses</Button>
+                </Link>
               </Card>
-            ))}
-          </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-6">
+                {enrollments.map((enrollment) => (
+                  <Card 
+                    key={enrollment.id}
+                    className="gradient-card shadow-soft hover:shadow-medium transition-smooth"
+                  >
+                    <div className="relative h-48 overflow-hidden rounded-t-lg">
+                      <img
+                        src={enrollment.courses.image_url || "/placeholder.svg"}
+                        alt={enrollment.courses.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <CardHeader>
+                      <CardTitle>{enrollment.courses.title}</CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {enrollment.courses.description}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span>Progress</span>
+                          <span>{enrollment.progress}%</span>
+                        </div>
+                        <Progress value={enrollment.progress} />
+                      </div>
+                      <Link to={`/courses/${enrollment.courses.id}`}>
+                        <Button className="w-full">
+                          Continue Course
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

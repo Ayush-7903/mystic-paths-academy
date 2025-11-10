@@ -63,8 +63,8 @@ export const Navbar = () => {
                 <Link to="/auth">
                   <Button variant="ghost">Login</Button>
                 </Link>
-                <Link to="/auth">
-                  <Button>Get Started</Button>
+                <Link to="/membership">
+                  <Button className="shadow-glow">Become a Member</Button>
                 </Link>
               </>
             )}
@@ -117,8 +117,8 @@ export const Navbar = () => {
                       Login
                     </Button>
                   </Link>
-                  <Link to="/auth" className="block" onClick={() => setIsMenuOpen(false)}>
-                    <Button className="w-full">Get Started</Button>
+                  <Link to="/membership" className="block" onClick={() => setIsMenuOpen(false)}>
+                    <Button className="w-full">Become a Member</Button>
                   </Link>
                 </>
               )}

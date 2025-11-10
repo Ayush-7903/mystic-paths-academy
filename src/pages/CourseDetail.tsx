@@ -22,20 +22,43 @@ const CourseDetail = () => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
+  const [isMember, setIsMember] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        checkMembership(session.user.id);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        checkMembership(session.user.id);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const checkMembership = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("is_member")
+        .eq("id", userId)
+        .single();
+      
+      if (data?.is_member) {
+        setIsMember(true);
+      }
+    } catch (error) {
+      console.error("Error checking membership:", error);
+    }
+  };
 
   useEffect(() => {
     if (id) {
@@ -179,31 +202,39 @@ const CourseDetail = () => {
               </div>
               
               {user ? (
-                isEnrolled ? (
-                  <Button className="w-full" disabled>
-                    <CheckCircle className="mr-2 w-4 h-4" />
-                    Enrolled
-                  </Button>
+                isMember ? (
+                  isEnrolled ? (
+                    <Button className="w-full" disabled>
+                      <CheckCircle className="mr-2 w-4 h-4" />
+                      Enrolled
+                    </Button>
+                  ) : (
+                    <Button 
+                      className="w-full shadow-glow" 
+                      onClick={handleEnroll}
+                      disabled={enrolling}
+                    >
+                      {enrolling ? (
+                        <>
+                          <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                          Enrolling...
+                        </>
+                      ) : (
+                        "Enroll Now"
+                      )}
+                    </Button>
+                  )
                 ) : (
-                  <Button 
-                    className="w-full shadow-glow" 
-                    onClick={handleEnroll}
-                    disabled={enrolling}
-                  >
-                    {enrolling ? (
-                      <>
-                        <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                        Enrolling...
-                      </>
-                    ) : (
-                      "Enroll Now"
-                    )}
-                  </Button>
+                  <Link to="/membership">
+                    <Button className="w-full shadow-glow">
+                      Become a Member to Enroll
+                    </Button>
+                  </Link>
                 )
               ) : (
-                <Link to="/auth">
+                <Link to="/membership">
                   <Button className="w-full shadow-glow">
-                    Login to Enroll
+                    Become a Member
                   </Button>
                 </Link>
               )}
