@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,6 @@ interface Course {
 
 const CourseDetail = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
@@ -66,12 +65,9 @@ const CourseDetail = () => {
       fetchCourse();
       if (user) {
         checkEnrollment();
-      } else {
-        // Redirect non-logged-in users to membership page
-        navigate('/membership');
       }
     }
-  }, [id, user, navigate]);
+  }, [id, user]);
 
   const fetchCourse = async () => {
     try {
