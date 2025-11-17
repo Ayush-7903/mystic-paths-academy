@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2, CheckCircle, ArrowLeft } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, CheckCircle, ArrowLeft, BookOpen, Lock, Award } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "@supabase/supabase-js";
@@ -16,13 +17,26 @@ interface Course {
   image_url: string | null;
 }
 
+interface Lesson {
+  id: string;
+  title: string;
+  content: string;
+  order_number: number;
+  section: string | null;
+  completed: boolean;
+}
+
 const CourseDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [course, setCourse] = useState<Course | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [isMember, setIsMember] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [enrolling, setEnrolling] = useState(false);
   const { toast } = useToast();
 
@@ -63,6 +77,7 @@ const CourseDetail = () => {
   useEffect(() => {
     if (id) {
       fetchCourse();
+      fetchLessons();
       if (user) {
         checkEnrollment();
       }
@@ -86,11 +101,55 @@ const CourseDetail = () => {
     }
   };
 
+  const fetchLessons = async () => {
+    try {
+      const { data: lessonsData, error: lessonsError } = await supabase
+        .from("lessons")
+        .select("*")
+        .eq("course_id", id)
+        .order("order_number");
+
+      if (lessonsError) throw lessonsError;
+
+      let lessonsWithCompletion: Lesson[] = [];
+
+      if (user) {
+        const { data: completionsData } = await supabase
+          .from("lesson_completions")
+          .select("lesson_id")
+          .eq("user_id", user.id);
+
+        const completedLessonIds = new Set(completionsData?.map(c => c.lesson_id) || []);
+        lessonsWithCompletion = (lessonsData || []).map(lesson => ({
+          ...lesson,
+          completed: completedLessonIds.has(lesson.id)
+        }));
+
+        const completedCount = completedLessonIds.size;
+        const totalLessons = lessonsData?.length || 0;
+        const progressPercent = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+        setProgress(progressPercent);
+      } else {
+        lessonsWithCompletion = (lessonsData || []).map(lesson => ({
+          ...lesson,
+          completed: false
+        }));
+      }
+
+      setLessons(lessonsWithCompletion);
+      if (lessonsWithCompletion.length > 0 && !selectedLesson) {
+        setSelectedLesson(lessonsWithCompletion[0]);
+      }
+    } catch (error) {
+      console.error("Error fetching lessons:", error);
+    }
+  };
+
   const checkEnrollment = async () => {
     if (!user || !id) return;
     
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("enrollments")
         .select("*")
         .eq("user_id", user.id)
@@ -99,17 +158,18 @@ const CourseDetail = () => {
 
       if (data) setIsEnrolled(true);
     } catch (error) {
-      // Not enrolled, which is fine
+      // Not enrolled
     }
   };
 
   const handleEnroll = async () => {
     if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please log in to enroll in courses",
-        variant: "destructive",
-      });
+      navigate("/auth");
+      return;
+    }
+
+    if (!isMember) {
+      navigate("/membership");
       return;
     }
 
@@ -127,7 +187,7 @@ const CourseDetail = () => {
       setIsEnrolled(true);
       toast({
         title: "Enrolled successfully!",
-        description: "You can now access this course from your dashboard",
+        description: "You can now access this course content",
       });
     } catch (error: any) {
       toast({
@@ -139,6 +199,48 @@ const CourseDetail = () => {
       setEnrolling(false);
     }
   };
+
+  const toggleLessonCompletion = async (lessonId: string, currentlyCompleted: boolean) => {
+    if (!user || !isMember) return;
+
+    try {
+      if (currentlyCompleted) {
+        await supabase
+          .from("lesson_completions")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("lesson_id", lessonId);
+      } else {
+        await supabase
+          .from("lesson_completions")
+          .insert({
+            user_id: user.id,
+            lesson_id: lessonId,
+          });
+      }
+
+      fetchLessons();
+      toast({
+        title: currentlyCompleted ? "Lesson unmarked" : "Lesson completed!",
+        description: currentlyCompleted ? "Progress updated" : "Great work! Keep going!",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const groupedLessons = lessons.reduce((acc, lesson) => {
+    const section = lesson.section || "Other";
+    if (!acc[section]) {
+      acc[section] = [];
+    }
+    acc[section].push(lesson);
+    return acc;
+  }, {} as Record<string, Lesson[]>);
 
   if (loading) {
     return (
