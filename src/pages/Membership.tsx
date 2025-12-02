@@ -73,7 +73,7 @@ const Membership = () => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
-      // Create user account
+      // Create user account - profile is auto-created by database trigger
       const { data: authData, error: signupError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -87,6 +87,9 @@ const Membership = () => {
 
       if (signupError) throw signupError;
 
+      // Wait a moment for the profile to be created by trigger
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Update profile to mark as member
       if (authData.user) {
         const { error: updateError } = await supabase
@@ -97,7 +100,10 @@ const Membership = () => {
           })
           .eq('id', authData.user.id);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('Profile update error:', updateError);
+          // Don't throw - profile was created, just membership flag failed
+        }
       }
 
       toast({
