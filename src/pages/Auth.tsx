@@ -22,12 +22,26 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/dashboard");
+    // Clear any corrupted auth data first
+    const clearCorruptedAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // If there's an error getting session, clear storage
+        if (error) {
+          await supabase.auth.signOut();
+          localStorage.clear();
+        } else if (session) {
+          navigate("/dashboard");
+        }
+      } catch (error) {
+        // Clear storage on any error
+        localStorage.clear();
+        await supabase.auth.signOut();
       }
-    });
+    };
+    
+    clearCorruptedAuth();
   }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -61,11 +75,22 @@ const Auth = () => {
       });
       navigate("/dashboard");
     } catch (error: any) {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      // Clear storage if authentication fails
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        localStorage.clear();
+        await supabase.auth.signOut();
+        toast({
+          title: "Connection Error",
+          description: "Please refresh the page and try again",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Login failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }
