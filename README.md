@@ -1,73 +1,144 @@
-# Welcome to your Lovable project
+# Spiritual Learning Portal
 
-## Project info
+A production-ready spiritual education platform built with React, Vite, TypeScript, and Lovable Cloud.
 
-**URL**: https://lovable.dev/projects/153caf58-fbb4-42b3-8cdf-75800420e329
+## 🏗️ Architecture Overview
 
-## How can I edit this code?
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (React + Vite)                   │
+├─────────────────────────────────────────────────────────────────┤
+│  Pages          │  Components      │  Hooks          │  Services │
+│  ├── Home       │  ├── common/     │  ├── useAuth    │  └── api  │
+│  ├── Courses    │  ├── layout/     │  ├── useCourses │           │
+│  ├── Dashboard  │  └── ui/         │  └── useEnroll  │           │
+│  └── Admin      │                  │                  │           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       LOVABLE CLOUD (Backend)                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Database (PostgreSQL)  │  Authentication  │  Edge Functions     │
+│  ├── courses            │  ├── Email/Pass  │  └── (Extensible)   │
+│  ├── lessons            │  └── Auto-confirm│                     │
+│  ├── enrollments        │                  │                     │
+│  ├── profiles           │                  │                     │
+│  └── user_roles         │                  │                     │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-There are several ways of editing your application.
+## 🛠️ Tech Stack
 
-**Use Lovable**
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, TypeScript, Vite |
+| Styling | Tailwind CSS, shadcn/ui |
+| State | TanStack Query, Custom Hooks |
+| Backend | Lovable Cloud |
+| Database | PostgreSQL with RLS |
+| Auth | Email/Password Authentication |
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/153caf58-fbb4-42b3-8cdf-75800420e329) and start prompting.
+## 📁 Project Structure
 
-Changes made via Lovable will be committed automatically to this repo.
+```
+src/
+├── components/
+│   ├── common/          # Reusable components (Loading, Error, Empty)
+│   ├── layout/          # Page layouts, headers, footer
+│   └── ui/              # shadcn/ui components
+├── hooks/               # Custom React hooks
+│   ├── useAuth.ts       # Authentication state
+│   ├── useCourses.ts    # Course data management
+│   └── useEnrollment.ts # Enrollment management
+├── pages/               # Route pages
+├── services/            # API service layer
+│   └── api.ts           # Centralized backend calls
+├── types/               # TypeScript type definitions
+├── utils/               # Utility functions
+│   ├── validation.ts    # Input validation with Zod
+│   └── constants.ts     # App constants
+└── integrations/        # Auto-generated backend client
+```
 
-**Use your preferred IDE**
+## 🔐 Security Features
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **Row Level Security (RLS)** on all database tables
+- **Role-based access control** (Admin/Member/Visitor)
+- **Input validation** with Zod schemas
+- **Secure authentication** with session management
+- **No secrets in frontend code**
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🚀 Getting Started
 
-Follow these steps:
+### Prerequisites
+- Node.js 18+
+- npm or yarn
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Installation
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```bash
+# Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Environment variables are auto-managed by Lovable Cloud. See `.env.example` for reference.
 
-**Use GitHub Codespaces**
+## 📦 Build & Deployment
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+# Production build
+npm run build
 
-## What technologies are used for this project?
+# Preview production build
+npm run preview
+```
 
-This project is built with:
+### Deployment
+- Click **Publish** in Lovable to deploy
+- Frontend and backend deploy automatically
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 📚 Documentation
 
-## How can I deploy this project?
+| Document | Description |
+|----------|-------------|
+| [BACKEND.md](./BACKEND.md) | Database schema, RLS policies, edge functions |
+| [SECURITY.md](./SECURITY.md) | Security architecture and recommendations |
 
-Simply open [Lovable](https://lovable.dev/projects/153caf58-fbb4-42b3-8cdf-75800420e329) and click on Share -> Publish.
+## 🎨 Design System
 
-## Can I connect a custom domain to my Lovable project?
+Uses CSS custom properties defined in `src/index.css`:
+- Semantic color tokens (light/dark themes)
+- Custom shadows and gradients
+- Consistent typography with Playfair Display + Inter
 
-Yes, you can!
+## 📊 Database Schema
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+| Table | Purpose |
+|-------|---------|
+| `courses` | Course content |
+| `lessons` | Course lessons with ordering |
+| `enrollments` | User course enrollments |
+| `lesson_completions` | Progress tracking |
+| `profiles` | User profile data |
+| `user_roles` | Role-based access control |
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 🔄 API Layer
+
+All backend interactions go through `src/services/api.ts`:
+
+```typescript
+import { courseService, authService } from '@/services/api';
+
+const courses = await courseService.getAllCourses();
+await authService.signIn(email, password);
+```
+
+## 📝 License
+
+© 2025 Spiritual Learning Portal. All rights reserved.
