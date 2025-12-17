@@ -115,24 +115,48 @@ When implementing:
 
 ### ✅ Implemented
 - [x] RLS enabled on all tables
-- [x] Role-based access control
-- [x] Input validation (client)
-- [x] Auth state management
-- [x] Secure function search_path
-- [x] XSS prevention (React)
-- [x] CSRF protection (Supabase)
+- [x] Role-based access control via separate `user_roles` table
+- [x] Input validation (client-side with Zod)
+- [x] Auth state management with proper cleanup
+- [x] Secure function search_path (prevents injection)
+- [x] XSS prevention (React auto-escaping)
+- [x] CSRF protection (Supabase handles)
+- [x] Private user profiles (own record only)
+- [x] Security definer functions (no RLS recursion)
+- [x] No secrets in frontend code
 
 ### ⚠️ Recommended for Production
 - [ ] Enable leaked password protection
-- [ ] Implement rate limiting
-- [ ] Add audit logging
-- [ ] Set up security monitoring
+- [ ] Disable auto-confirm emails
+- [ ] Implement rate limiting on Edge Functions
+- [ ] Add audit logging for admin actions
+- [ ] Set up security monitoring/alerting
 - [ ] Configure CSP headers
-- [ ] Enable MFA for admins
+- [ ] Enable MFA for admin accounts
+- [ ] Set up real payment processing
+
+## Frontend/Backend Separation
+
+### Frontend (`src/`)
+- UI components and pages
+- Client-side state management
+- Input validation (defense in depth)
+- No direct database queries - uses API layer
+
+### Backend (`supabase/`)
+- Database with RLS (server-side enforcement)
+- Edge Functions for secure operations
+- Authentication handling
+- All secrets stored securely
+
+### API Layer (`src/services/api.ts`)
+- Centralized backend communication
+- Single point of control for all data fetching
+- Consistent error handling
 
 ## Vulnerability Reporting
 
-If you discover a security vulnerability, please:
+If you discover a security vulnerability:
 1. Do NOT create a public issue
 2. Contact the development team directly
 3. Allow time for a fix before disclosure
@@ -145,4 +169,4 @@ npm audit
 npm update
 ```
 
-Monitor Supabase security advisories and apply patches promptly.
+Monitor Lovable Cloud security advisories and apply patches promptly.
