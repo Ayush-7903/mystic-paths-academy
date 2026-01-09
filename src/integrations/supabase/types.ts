@@ -20,6 +20,7 @@ export type Database = {
           description: string
           id: string
           image_url: string | null
+          price_cents: number
           title: string
           updated_at: string
           video_url: string
@@ -29,6 +30,7 @@ export type Database = {
           description: string
           id?: string
           image_url?: string | null
+          price_cents?: number
           title: string
           updated_at?: string
           video_url: string
@@ -38,6 +40,7 @@ export type Database = {
           description?: string
           id?: string
           image_url?: string | null
+          price_cents?: number
           title?: string
           updated_at?: string
           video_url?: string
@@ -173,6 +176,50 @@ export type Database = {
         }
         Relationships: []
       }
+      purchases: {
+        Row: {
+          amount_cents: number
+          course_id: string
+          currency: string
+          id: string
+          purchased_at: string
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          course_id: string
+          currency?: string
+          id?: string
+          purchased_at?: string
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          course_id?: string
+          currency?: string
+          id?: string
+          purchased_at?: string
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -202,6 +249,10 @@ export type Database = {
       calculate_course_progress: {
         Args: { p_course_id: string; p_user_id: string }
         Returns: number
+      }
+      has_purchased_course: {
+        Args: { p_course_id: string; p_user_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
