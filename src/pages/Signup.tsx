@@ -4,57 +4,56 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Check } from "lucide-react";
 import { z } from "zod";
 
 const emailSchema = z.string().trim().email({ message: "Invalid email address" });
 const passwordSchema = z.string().min(6, { message: "Password must be at least 6 characters" });
 
-const Auth = () => {
+const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  
+  const [fullName, setFullName] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Clear any corrupted auth data first
-    const clearCorruptedAuth = async () => {
+    const checkSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        // If there's an error getting session, clear storage
         if (error) {
           await supabase.auth.signOut();
           localStorage.clear();
         } else if (session) {
           navigate("/dashboard");
         }
-      } catch (error) {
-        // Clear storage on any error
+      } catch {
         localStorage.clear();
         await supabase.auth.signOut();
       }
     };
     
-    clearCorruptedAuth();
+    checkSession();
   }, [navigate]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate inputs
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
-    } catch (error: any) {
+      if (!fullName.trim()) {
+        throw new Error("Full name is required");
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Invalid input";
       toast({
         title: "Validation Error",
-        description: error.errors?.[0]?.message || "Invalid input",
+        description: message,
         variant: "destructive",
       });
       return;
@@ -62,21 +61,29 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { error: signupError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: fullName.trim(),
+          },
+        },
       });
 
-      if (error) throw error;
+      if (signupError) throw signupError;
 
       toast({
-        title: "Welcome back!",
-        description: "You've successfully logged in",
+        title: "Account created!",
+        description: "Welcome to the Spiritual Academy. Start exploring courses!",
       });
       navigate("/dashboard");
-    } catch (error: any) {
-      // Clear storage if authentication fails
-      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Signup failed";
+      if (message.includes('fetch') || message.includes('network')) {
         localStorage.clear();
         await supabase.auth.signOut();
         toast({
@@ -86,8 +93,8 @@ const Auth = () => {
         });
       } else {
         toast({
-          title: "Login failed",
-          description: error.message,
+          title: "Signup failed",
+          description: message,
           variant: "destructive",
         });
       }
@@ -95,7 +102,6 @@ const Auth = () => {
       setLoading(false);
     }
   };
-
 
   return (
     <div 
@@ -112,15 +118,26 @@ const Auth = () => {
           <div className="flex justify-center mb-4">
             <Sparkles className="w-12 h-12 text-primary" />
           </div>
-          <CardTitle className="text-3xl">Welcome Back</CardTitle>
-          <CardDescription>Login to continue your spiritual journey</CardDescription>
+          <CardTitle className="text-3xl">Create Account</CardTitle>
+          <CardDescription>Join our spiritual learning community</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="login-email">Email</Label>
+              <Label htmlFor="full-name">Full Name</Label>
               <Input
-                id="login-email"
+                id="full-name"
+                type="text"
+                placeholder="Your Name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
                 type="email"
                 placeholder="your@email.com"
                 value={email}
@@ -129,45 +146,63 @@ const Auth = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="login-password">Password</Label>
+              <Label htmlFor="password">Password</Label>
               <Input
-                id="login-password"
+                id="password"
                 type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <p className="text-xs text-muted-foreground">At least 6 characters</p>
             </div>
-            <div className="text-right">
-              <Button 
-                variant="link" 
-                className="p-0 h-auto text-sm text-muted-foreground" 
-                onClick={() => navigate("/forgot-password")}
-                type="button"
-              >
-                Forgot password?
-              </Button>
+
+            <div className="bg-primary/10 border border-primary/20 rounded-md p-4">
+              <p className="text-sm font-medium">What you get:</p>
+              <ul className="text-sm text-muted-foreground mt-2 space-y-1">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary" />
+                  Browse all available courses
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary" />
+                  Purchase individual courses
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary" />
+                  Lifetime access to purchased courses
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary" />
+                  Track your learning progress
+                </li>
+              </ul>
             </div>
-            <Button type="submit" className="w-full shadow-glow" disabled={loading}>
+
+            <Button type="submit" className="w-full shadow-glow" size="lg" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                  Logging in...
+                  Creating account...
                 </>
               ) : (
-                "Login"
+                <>
+                  <Sparkles className="mr-2 w-4 h-4" />
+                  Sign Up
+                </>
               )}
             </Button>
-            <p className="text-center text-sm text-muted-foreground pt-4">
-              Don't have an account?{" "}
+
+            <p className="text-center text-sm text-muted-foreground">
+              Already have an account?{" "}
               <Button 
                 variant="link" 
-                className="p-0 h-auto text-primary" 
-                onClick={() => navigate("/signup")}
+                className="p-0 h-auto" 
+                onClick={() => navigate("/auth")}
                 type="button"
               >
-                Sign up
+                Login here
               </Button>
             </p>
           </form>
@@ -177,4 +212,4 @@ const Auth = () => {
   );
 };
 
-export default Auth;
+export default Signup;

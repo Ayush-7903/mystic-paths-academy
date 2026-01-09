@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, CheckCircle, ArrowLeft, BookOpen, Lock, Award } from "lucide-react";
+import { Loader2, CheckCircle, ArrowLeft, BookOpen, Lock, Award, ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "@supabase/supabase-js";
@@ -15,6 +15,7 @@ interface Course {
   description: string;
   video_url: string;
   image_url: string | null;
+  price_cents: number;
 }
 
 interface Lesson {
@@ -29,57 +30,80 @@ interface Lesson {
 const CourseDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-  const [isEnrolled, setIsEnrolled] = useState(false);
-  const [isMember, setIsMember] = useState(false);
+  const [hasPurchased, setHasPurchased] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [enrolling, setEnrolling] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
   const { toast } = useToast();
+
+  // Check for payment success
+  useEffect(() => {
+    const paymentStatus = searchParams.get("payment");
+    const sessionId = searchParams.get("session_id");
+    
+    if (paymentStatus === "success" && sessionId && user && id) {
+      verifyPurchase(sessionId);
+    } else if (paymentStatus === "cancelled") {
+      toast({
+        title: "Payment cancelled",
+        description: "Your payment was cancelled. You can try again anytime.",
+        variant: "destructive",
+      });
+      // Clear the URL params
+      navigate(`/courses/${id}`, { replace: true });
+    }
+  }, [searchParams, user, id]);
+
+  const verifyPurchase = async (sessionId: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-purchase', {
+        body: { sessionId, courseId: id },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setHasPurchased(true);
+        toast({
+          title: "Purchase successful!",
+          description: "You now have lifetime access to this course.",
+        });
+        // Refresh data
+        fetchLessons();
+      }
+      
+      // Clear the URL params
+      navigate(`/courses/${id}`, { replace: true });
+    } catch (error) {
+      console.error("Error verifying purchase:", error);
+      // Clear the URL params
+      navigate(`/courses/${id}`, { replace: true });
+    }
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) {
-        checkMembership(session.user.id);
-      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) {
-        checkMembership(session.user.id);
-      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
-
-  const checkMembership = async (userId: string) => {
-    try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("is_member")
-        .eq("id", userId)
-        .single();
-      
-      if (data?.is_member) {
-        setIsMember(true);
-      }
-    } catch (error) {
-      console.error("Error checking membership:", error);
-    }
-  };
 
   useEffect(() => {
     if (id) {
       fetchCourse();
       fetchLessons();
       if (user) {
-        checkEnrollment();
+        checkPurchase();
       }
     }
   }, [id, user]);
@@ -145,63 +169,61 @@ const CourseDetail = () => {
     }
   };
 
-  const checkEnrollment = async () => {
+  const checkPurchase = async () => {
     if (!user || !id) return;
     
     try {
       const { data } = await supabase
-        .from("enrollments")
+        .from("purchases")
         .select("*")
         .eq("user_id", user.id)
         .eq("course_id", id)
+        .eq("status", "completed")
         .single();
 
-      if (data) setIsEnrolled(true);
-    } catch (error) {
-      // Not enrolled
+      if (data) setHasPurchased(true);
+    } catch {
+      // Not purchased
     }
   };
 
-  const handleEnroll = async () => {
+  const handlePurchase = async () => {
     if (!user) {
       navigate("/auth");
       return;
     }
 
-    if (!isMember) {
-      navigate("/membership");
-      return;
-    }
+    if (!course) return;
 
-    setEnrolling(true);
+    setPurchasing(true);
     try {
-      const { error } = await supabase
-        .from("enrollments")
-        .insert({
-          user_id: user.id,
-          course_id: id,
-        });
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: {
+          courseId: course.id,
+          priceInCents: course.price_cents,
+          courseTitle: course.title,
+        },
+      });
 
       if (error) throw error;
 
-      setIsEnrolled(true);
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to start checkout";
       toast({
-        title: "Enrolled successfully!",
-        description: "You can now access this course content",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Enrollment failed",
-        description: error.message,
+        title: "Checkout failed",
+        description: message,
         variant: "destructive",
       });
     } finally {
-      setEnrolling(false);
+      setPurchasing(false);
     }
   };
 
   const toggleLessonCompletion = async (lessonId: string, currentlyCompleted: boolean) => {
-    if (!user || !isMember) return;
+    if (!user || !hasPurchased) return;
 
     try {
       if (currentlyCompleted) {
@@ -224,10 +246,11 @@ const CourseDetail = () => {
         title: currentlyCompleted ? "Lesson unmarked" : "Lesson completed!",
         description: currentlyCompleted ? "Progress updated" : "Great work! Keep going!",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Error updating progress";
       toast({
         title: "Error",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     }
@@ -241,6 +264,13 @@ const CourseDetail = () => {
     acc[section].push(lesson);
     return acc;
   }, {} as Record<string, Lesson[]>);
+
+  const formatPrice = (cents: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(cents / 100);
+  };
 
   if (loading) {
     return (
@@ -301,7 +331,7 @@ const CourseDetail = () => {
             </div>
 
             {/* Progress Section */}
-            {user && isMember && isEnrolled && (
+            {user && hasPurchased && (
               <Card className="gradient-card shadow-soft p-6 border-primary/20">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -320,7 +350,7 @@ const CourseDetail = () => {
             )}
 
             {/* Lessons Section */}
-            {isEnrolled && (
+            {hasPurchased && (
               <div className="space-y-6">
                 <h2 className="text-3xl font-bold flex items-center gap-2">
                   <BookOpen className="w-7 h-7 text-primary" />
@@ -349,10 +379,8 @@ const CourseDetail = () => {
                               <div className="flex items-center gap-3">
                                 {lesson.completed ? (
                                   <CheckCircle className="w-5 h-5 text-primary flex-shrink-0" />
-                                ) : user && isMember ? (
-                                  <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />
                                 ) : (
-                                  <Lock className="w-5 h-5 text-muted-foreground/50 flex-shrink-0" />
+                                  <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />
                                 )}
                                 <h4 className="font-semibold text-lg">{lesson.title}</h4>
                               </div>
@@ -361,7 +389,7 @@ const CourseDetail = () => {
                                   <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line leading-relaxed">
                                     {lesson.content}
                                   </div>
-                                  {user && isMember && (
+                                  {user && (
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -391,6 +419,33 @@ const CourseDetail = () => {
                 ))}
               </div>
             )}
+
+            {/* Preview for non-purchased */}
+            {!hasPurchased && lessons.length > 0 && (
+              <div className="space-y-6">
+                <h2 className="text-3xl font-bold flex items-center gap-2">
+                  <BookOpen className="w-7 h-7 text-primary" />
+                  Course Content Preview
+                </h2>
+                <Card className="gradient-card shadow-soft border-primary/10 overflow-hidden">
+                  <div className="divide-y divide-border/50">
+                    {lessons.slice(0, 3).map((lesson, index) => (
+                      <div key={lesson.id} className="p-6">
+                        <div className="flex items-center gap-3">
+                          <Lock className="w-5 h-5 text-muted-foreground/50 flex-shrink-0" />
+                          <h4 className="font-semibold text-lg text-muted-foreground">{lesson.title}</h4>
+                        </div>
+                      </div>
+                    ))}
+                    {lessons.length > 3 && (
+                      <div className="p-6 text-center text-muted-foreground">
+                        + {lessons.length - 3} more lessons
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            )}
           </div>
 
           <div className="lg:col-span-1">
@@ -406,8 +461,16 @@ const CourseDetail = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </div>
 
+                {/* Price */}
+                <div className="text-center">
+                  <div className="text-4xl font-bold text-primary">
+                    {formatPrice(course.price_cents)}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">Lifetime access</p>
+                </div>
+
                 {/* Course Stats */}
-                {isEnrolled && (
+                {hasPurchased && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-3 rounded-lg bg-primary/10 border border-primary/20">
                       <div className="text-2xl font-bold text-primary">{lessons.length}</div>
@@ -420,52 +483,58 @@ const CourseDetail = () => {
                   </div>
                 )}
                 
-                {/* Enrollment Button */}
+                {/* Purchase/Access Button */}
                 {user ? (
-                  isMember ? (
-                    isEnrolled ? (
-                      <Button className="w-full bg-primary/20 hover:bg-primary/30 border border-primary/40" disabled>
-                        <CheckCircle className="mr-2 w-4 h-4" />
-                        Enrolled
-                      </Button>
-                    ) : (
-                      <Button 
-                        className="w-full shadow-glow hover:shadow-glow-lg transition-all duration-300" 
-                        onClick={handleEnroll}
-                        disabled={enrolling}
-                      >
-                        {enrolling ? (
-                          <>
-                            <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                            Enrolling...
-                          </>
-                        ) : (
-                          <>
-                            <BookOpen className="mr-2 w-4 h-4" />
-                            Enroll Now
-                          </>
-                        )}
-                      </Button>
-                    )
+                  hasPurchased ? (
+                    <Button className="w-full bg-primary/20 hover:bg-primary/30 border border-primary/40" disabled>
+                      <CheckCircle className="mr-2 w-4 h-4" />
+                      Purchased
+                    </Button>
                   ) : (
-                    <Link to="/membership" className="block">
-                      <Button className="w-full shadow-glow hover:shadow-glow-lg transition-all duration-300">
-                        <Award className="mr-2 w-4 h-4" />
-                        Become a Member to Enroll
-                      </Button>
-                    </Link>
+                    <Button 
+                      className="w-full shadow-glow hover:shadow-glow-lg transition-all duration-300" 
+                      onClick={handlePurchase}
+                      disabled={purchasing}
+                      size="lg"
+                    >
+                      {purchasing ? (
+                        <>
+                          <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingCart className="mr-2 w-4 h-4" />
+                          Buy This Course
+                        </>
+                      )}
+                    </Button>
                   )
                 ) : (
-                  <Link to="/membership" className="block">
-                    <Button className="w-full shadow-glow hover:shadow-glow-lg transition-all duration-300">
-                      <Award className="mr-2 w-4 h-4" />
-                      Become a Member
+                  <div className="space-y-3">
+                    <Button 
+                      className="w-full shadow-glow hover:shadow-glow-lg transition-all duration-300"
+                      onClick={() => navigate("/signup")}
+                      size="lg"
+                    >
+                      <ShoppingCart className="mr-2 w-4 h-4" />
+                      Sign Up to Purchase
                     </Button>
-                  </Link>
+                    <p className="text-center text-sm text-muted-foreground">
+                      Already have an account?{" "}
+                      <Button 
+                        variant="link" 
+                        className="p-0 h-auto text-primary"
+                        onClick={() => navigate("/auth")}
+                      >
+                        Login
+                      </Button>
+                    </p>
+                  </div>
                 )}
 
                 {/* Additional Info */}
-                {isEnrolled && (
+                {hasPurchased && (
                   <div className="pt-4 border-t border-border/50 space-y-2">
                     <p className="text-sm text-muted-foreground flex items-center gap-2">
                       <BookOpen className="w-4 h-4 text-primary" />
@@ -475,6 +544,27 @@ const CourseDetail = () => {
                       <Award className="w-4 h-4 text-primary" />
                       {Object.keys(groupedLessons).length} sections to explore
                     </p>
+                  </div>
+                )}
+
+                {/* Features for non-purchased */}
+                {!hasPurchased && (
+                  <div className="pt-4 border-t border-border/50 space-y-2">
+                    <p className="text-sm font-medium">This course includes:</p>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-primary" />
+                        {lessons.length} lessons
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-primary" />
+                        Lifetime access
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-primary" />
+                        Progress tracking
+                      </li>
+                    </ul>
                   </div>
                 )}
               </div>
