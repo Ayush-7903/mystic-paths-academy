@@ -60,11 +60,11 @@ export const Navbar = () => {
               </Button>
             ) : (
               <>
-                <Link to="/auth">
+              <Link to="/auth">
                   <Button variant="ghost">Login</Button>
                 </Link>
-                <Link to="/membership">
-                  <Button className="shadow-glow">Become a Member</Button>
+                <Link to="/signup">
+                  <Button className="shadow-glow">Sign Up</Button>
                 </Link>
               </>
             )}
@@ -117,8 +117,8 @@ export const Navbar = () => {
                       Login
                     </Button>
                   </Link>
-                  <Link to="/membership" className="block" onClick={() => setIsMenuOpen(false)}>
-                    <Button className="w-full">Become a Member</Button>
+                  <Link to="/signup" className="block" onClick={() => setIsMenuOpen(false)}>
+                    <Button className="w-full">Sign Up</Button>
                   </Link>
                 </>
               )}

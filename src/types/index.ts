@@ -99,11 +99,8 @@ export interface AuthFormData {
   password: string;
 }
 
-export interface MembershipFormData extends AuthFormData {
+export interface SignupFormData extends AuthFormData {
   fullName: string;
-  cardNumber: string;
-  expiryDate: string;
-  cvv: string;
 }
 
 // Component Props Types
