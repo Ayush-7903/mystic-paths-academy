@@ -13,9 +13,11 @@ export const ROUTES = {
   COURSES: '/courses',
   COURSE_DETAIL: '/courses/:id',
   AUTH: '/auth',
-  MEMBERSHIP: '/membership',
+  SIGNUP: '/signup',
   DASHBOARD: '/dashboard',
   ADMIN: '/admin',
+  FORGOT_PASSWORD: '/forgot-password',
+  RESET_PASSWORD: '/reset-password',
 } as const;
 
 // API Limits
@@ -32,10 +34,5 @@ export const UI = {
   ANIMATION_DURATION_MS: 300,
 } as const;
 
-// Membership Benefits (for display)
-export const MEMBERSHIP_BENEFITS = [
-  'Access to all spiritual courses',
-  'Lifetime enrollment capability',
-  'Track your spiritual journey',
-  'Join our community of seekers',
-] as const;
+// Course pricing
+export const COURSE_PRICE_CENTS = 3000; // $30 USD per course

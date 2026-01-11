@@ -8,7 +8,6 @@ import type {
   Course, 
   Lesson, 
   Profile, 
-  Enrollment, 
   EnrollmentWithCourse,
   UserRole,
   LessonCompletion,
@@ -104,27 +103,45 @@ export const profileService = {
     if (error) throw handleError(error);
     return data;
   },
+};
 
-  async checkMembership(userId: string): Promise<boolean> {
+// ============================================
+// Purchase Services
+// ============================================
+
+export const purchaseService = {
+  async checkPurchase(userId: string, courseId: string): Promise<boolean> {
     const { data } = await supabase
-      .from('profiles')
-      .select('is_member')
-      .eq('id', userId)
+      .from('purchases')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('course_id', courseId)
+      .eq('status', 'completed')
       .maybeSingle();
     
-    return data?.is_member ?? false;
+    return !!data;
   },
 
-  async activateMembership(userId: string) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        is_member: true,
-        member_since: new Date().toISOString(),
-      })
-      .eq('id', userId);
+  async getUserPurchases(userId: string) {
+    const { data, error } = await supabase
+      .from('purchases')
+      .select(`
+        id,
+        course_id,
+        purchased_at,
+        amount_cents,
+        courses (
+          id,
+          title,
+          description,
+          image_url
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('status', 'completed');
     
     if (error) throw handleError(error);
+    return data || [];
   },
 };
 

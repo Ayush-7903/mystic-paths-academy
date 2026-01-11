@@ -62,15 +62,11 @@ export const loginFormSchema = z.object({
   password: passwordSchema,
 });
 
-// Membership signup form validation
-export const membershipFormSchema = z.object({
+// Signup form validation
+export const signupFormSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   fullName: fullNameSchema,
-  // Note: Card details are demo-only, minimal validation
-  cardNumber: z.string().min(1, { message: 'Card number is required' }),
-  expiryDate: z.string().min(1, { message: 'Expiry date is required' }),
-  cvv: z.string().min(1, { message: 'CVV is required' }),
 });
 
 // Validation helper function

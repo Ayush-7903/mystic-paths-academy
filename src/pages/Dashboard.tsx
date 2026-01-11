@@ -4,9 +4,21 @@ import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, BookOpen, Settings } from "lucide-react";
+import { Loader2, BookOpen, Settings, ShoppingBag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
+
+interface PurchasedCourse {
+  id: string;
+  course_id: string;
+  purchased_at: string;
+  courses: {
+    id: string;
+    title: string;
+    description: string;
+    image_url: string | null;
+  };
+}
 
 interface Enrollment {
   id: string;
@@ -21,10 +33,10 @@ interface Enrollment {
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [purchases, setPurchases] = useState<PurchasedCourse[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isMember, setIsMember] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -53,24 +65,34 @@ const Dashboard = () => {
       setIsAdmin(true);
     }
 
-    // Check if user is a member
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("is_member")
-      .eq("id", session.user.id)
-      .single();
-    
-    if (profileData?.is_member) {
-      setIsMember(true);
-      fetchEnrollments(session.user.id);
-    } else {
-      setLoading(false);
-    }
+    // Fetch user's purchases and enrollments
+    await fetchUserData(session.user.id);
   };
 
-  const fetchEnrollments = async (userId: string) => {
+  const fetchUserData = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // Fetch purchases
+      const { data: purchasesData, error: purchasesError } = await supabase
+        .from("purchases")
+        .select(`
+          id,
+          course_id,
+          purchased_at,
+          courses (
+            id,
+            title,
+            description,
+            image_url
+          )
+        `)
+        .eq("user_id", userId)
+        .eq("status", "completed");
+
+      if (purchasesError) throw purchasesError;
+      setPurchases(purchasesData || []);
+
+      // Fetch enrollments with progress
+      const { data: enrollmentsData, error: enrollmentsError } = await supabase
         .from("enrollments")
         .select(`
           id,
@@ -84,13 +106,19 @@ const Dashboard = () => {
         `)
         .eq("user_id", userId);
 
-      if (error) throw error;
-      setEnrollments(data || []);
+      if (enrollmentsError) throw enrollmentsError;
+      setEnrollments(enrollmentsData || []);
     } catch (error) {
-      console.error("Error fetching enrollments:", error);
+      console.error("Error fetching user data:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Combine purchases with enrollment progress
+  const getProgress = (courseId: string) => {
+    const enrollment = enrollments.find(e => e.courses.id === courseId);
+    return enrollment?.progress || 0;
   };
 
   if (loading) {
@@ -139,72 +167,67 @@ const Dashboard = () => {
           </div>
         )}
 
-        {!isMember ? (
-          <Card className="gradient-card shadow-soft text-center p-12">
-            <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-2xl mb-2">Membership Required</h3>
-            <p className="text-muted-foreground mb-6">
-              Become a member to access all courses and start your spiritual journey
-            </p>
-            <Link to="/membership">
-              <Button className="shadow-glow">Become a Member</Button>
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl flex items-center gap-2">
+              <ShoppingBag className="w-8 h-8 text-primary" />
+              Your Purchased Courses
+            </h2>
+            <Link to="/courses">
+              <Button variant="outline">Browse More Courses</Button>
             </Link>
-          </Card>
-        ) : (
-          <>
-            <h2 className="text-3xl mb-6">Your Enrolled Courses</h2>
-            
-            {enrollments.length === 0 ? (
-              <Card className="gradient-card shadow-soft text-center p-12">
-                <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-2xl mb-2">No Courses Yet</h3>
-                <p className="text-muted-foreground mb-6">
-                  Start your spiritual journey by enrolling in a course
-                </p>
-                <Link to="/courses">
-                  <Button>Browse Courses</Button>
-                </Link>
-              </Card>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-6">
-                {enrollments.map((enrollment) => (
-                  <Card 
-                    key={enrollment.id}
-                    className="gradient-card shadow-soft hover:shadow-medium transition-smooth"
-                  >
-                    <div className="relative h-48 overflow-hidden rounded-t-lg">
-                      <img
-                        src={enrollment.courses.image_url || "/placeholder.svg"}
-                        alt={enrollment.courses.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <CardHeader>
-                      <CardTitle>{enrollment.courses.title}</CardTitle>
-                      <CardDescription className="line-clamp-2">
-                        {enrollment.courses.description}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span>Progress</span>
-                          <span>{enrollment.progress}%</span>
-                        </div>
-                        <Progress value={enrollment.progress} />
+          </div>
+          
+          {purchases.length === 0 ? (
+            <Card className="gradient-card shadow-soft text-center p-12">
+              <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-2xl mb-2">No Courses Yet</h3>
+              <p className="text-muted-foreground mb-6">
+                Start your spiritual journey by purchasing a course
+              </p>
+              <Link to="/courses">
+                <Button className="shadow-glow">Browse Courses</Button>
+              </Link>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-6">
+              {purchases.map((purchase) => (
+                <Card 
+                  key={purchase.id}
+                  className="gradient-card shadow-soft hover:shadow-medium transition-smooth"
+                >
+                  <div className="relative h-48 overflow-hidden rounded-t-lg">
+                    <img
+                      src={purchase.courses.image_url || "/placeholder.svg"}
+                      alt={purchase.courses.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <CardHeader>
+                    <CardTitle>{purchase.courses.title}</CardTitle>
+                    <CardDescription className="line-clamp-2">
+                      {purchase.courses.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span>Progress</span>
+                        <span>{getProgress(purchase.courses.id)}%</span>
                       </div>
-                      <Link to={`/courses/${enrollment.courses.id}`}>
-                        <Button className="w-full">
-                          Continue Course
-                        </Button>
-                      </Link>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+                      <Progress value={getProgress(purchase.courses.id)} />
+                    </div>
+                    <Link to={`/courses/${purchase.courses.id}`}>
+                      <Button className="w-full">
+                        Continue Course
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
