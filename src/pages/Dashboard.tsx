@@ -4,11 +4,13 @@ import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, BookOpen, Settings, ShoppingBag } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, BookOpen, Award, ArrowRight, ShoppingBag, GraduationCap, PlayCircle, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
+import { Footer } from "@/components/layout/Footer";
 
-interface PurchasedCourse {
+interface Purchase {
   id: string;
   course_id: string;
   purchased_at: string;
@@ -20,59 +22,84 @@ interface PurchasedCourse {
   };
 }
 
-interface Enrollment {
-  id: string;
-  progress: number;
-  courses: {
-    id: string;
-    title: string;
-    description: string;
-    image_url: string | null;
-  };
+interface CourseProgress {
+  courseId: string;
+  totalLessons: number;
+  completedLessons: number;
+  progressPercent: number;
 }
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [purchases, setPurchases] = useState<PurchasedCourse[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [progress, setProgress] = useState<Record<string, CourseProgress>>({});
   const [loading, setLoading] = useState(true);
+  const [profileName, setProfileName] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        navigate("/auth");
+        return;
+      }
+      
+      setUser(session.user);
+      
+      // Check if user is admin
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", session.user.id)
+        .eq("role", "admin")
+        .single();
+      
+      if (roleData) {
+        setIsAdmin(true);
+      }
+
+      await Promise.all([
+        fetchPurchases(session.user.id),
+        fetchProfile(session.user.id)
+      ]);
+      setLoading(false);
+    };
+
     checkAuth();
-  }, []);
 
-  const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      navigate("/auth");
-      return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", userId)
+        .single();
+
+      if (data) {
+        setProfileName(data.full_name);
+      }
+    } catch {
+      // Use email as fallback
     }
-
-    setUser(session.user);
-    
-    // Check if user is admin
-    const { data: roleData } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", session.user.id)
-      .eq("role", "admin")
-      .single();
-    
-    if (roleData) {
-      setIsAdmin(true);
-    }
-
-    // Fetch user's purchases and enrollments
-    await fetchUserData(session.user.id);
   };
 
-  const fetchUserData = async (userId: string) => {
+  const fetchPurchases = async (userId: string) => {
     try {
-      // Fetch purchases
-      const { data: purchasesData, error: purchasesError } = await supabase
+      const { data: purchasesData, error } = await supabase
         .from("purchases")
         .select(`
           id,
@@ -86,40 +113,72 @@ const Dashboard = () => {
           )
         `)
         .eq("user_id", userId)
-        .eq("status", "completed");
+        .eq("status", "completed")
+        .order("purchased_at", { ascending: false });
 
-      if (purchasesError) throw purchasesError;
-      setPurchases(purchasesData || []);
+      if (error) throw error;
+      
+      const validPurchases = (purchasesData || []).filter(p => p.courses) as Purchase[];
+      setPurchases(validPurchases);
 
-      // Fetch enrollments with progress
-      const { data: enrollmentsData, error: enrollmentsError } = await supabase
-        .from("enrollments")
-        .select(`
-          id,
-          progress,
-          courses (
-            id,
-            title,
-            description,
-            image_url
-          )
-        `)
-        .eq("user_id", userId);
-
-      if (enrollmentsError) throw enrollmentsError;
-      setEnrollments(enrollmentsData || []);
+      // Fetch progress for each purchased course
+      if (validPurchases.length > 0) {
+        await fetchProgress(userId, validPurchases);
+      }
     } catch (error) {
-      console.error("Error fetching user data:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching purchases:", error);
     }
   };
 
-  // Combine purchases with enrollment progress
-  const getProgress = (courseId: string) => {
-    const enrollment = enrollments.find(e => e.courses.id === courseId);
-    return enrollment?.progress || 0;
+  const fetchProgress = async (userId: string, purchasesList: Purchase[]) => {
+    try {
+      const progressData: Record<string, CourseProgress> = {};
+
+      for (const purchase of purchasesList) {
+        const courseId = purchase.course_id;
+
+        // Get total lessons for this course
+        const { data: lessonsData } = await supabase
+          .from("lessons")
+          .select("id")
+          .eq("course_id", courseId);
+
+        // Get completed lessons for this user
+        const { data: completionsData } = await supabase
+          .from("lesson_completions")
+          .select("lesson_id")
+          .eq("user_id", userId);
+
+        const totalLessons = lessonsData?.length || 0;
+        const completedLessonIds = new Set(completionsData?.map(c => c.lesson_id) || []);
+        
+        // Count completed lessons for this course
+        const completedLessons = lessonsData?.filter(l => completedLessonIds.has(l.id)).length || 0;
+        
+        const progressPercent = totalLessons > 0 
+          ? Math.round((completedLessons / totalLessons) * 100) 
+          : 0;
+
+        progressData[courseId] = {
+          courseId,
+          totalLessons,
+          completedLessons,
+          progressPercent
+        };
+      }
+
+      setProgress(progressData);
+    } catch (error) {
+      console.error("Error fetching progress:", error);
+    }
   };
+
+  const totalCourses = purchases.length;
+  const completedCourses = Object.values(progress).filter(p => p.progressPercent === 100).length;
+  const inProgressCourses = Object.values(progress).filter(p => p.progressPercent > 0 && p.progressPercent < 100).length;
+  const overallProgress = totalCourses > 0 
+    ? Math.round(Object.values(progress).reduce((sum, p) => sum + p.progressPercent, 0) / totalCourses)
+    : 0;
 
   if (loading) {
     return (
@@ -133,102 +192,202 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <Navbar />
       
-      <div className="pt-24 pb-16 gradient-hero">
+      {/* Hero Section */}
+      <div 
+        className="pt-24 pb-12"
+        style={{
+          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.6)), url('/images/hero-bg.jpg')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
         <div className="container mx-auto px-4">
-          <h1 className="text-5xl md:text-6xl mb-4">
-            Welcome Back, {user?.user_metadata?.full_name || "Seeker"}
+          <h1 className="text-4xl md:text-5xl mb-2 text-white drop-shadow-lg">
+            Welcome back, {profileName || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Seeker'}!
           </h1>
-          <p className="text-xl text-muted-foreground">
-            Continue your journey toward enlightenment
+          <p className="text-lg text-white/80">
+            Continue your spiritual journey
           </p>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-4 py-8 flex-grow">
+        {/* Admin Access */}
         {isAdmin && (
-          <div className="mb-8">
-            <Card className="gradient-card shadow-soft border-primary">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Settings className="mr-2 w-5 h-5" />
-                  Admin Access
-                </CardTitle>
-                <CardDescription>Manage courses and content</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link to="/admin">
-                  <Button>Go to Admin Dashboard</Button>
+          <Card className="gradient-card shadow-soft border-primary mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Settings className="mr-2 w-5 h-5" />
+                Admin Access
+              </CardTitle>
+              <CardDescription>Manage courses and content</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link to="/admin">
+                <Button>Go to Admin Dashboard</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid md:grid-cols-4 gap-4 mb-8">
+          <Card className="gradient-card border-primary/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Courses Owned</p>
+                  <p className="text-3xl font-bold text-primary">{totalCourses}</p>
+                </div>
+                <ShoppingBag className="w-10 h-10 text-primary/50" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="gradient-card border-primary/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Completed</p>
+                  <p className="text-3xl font-bold text-green-500">{completedCourses}</p>
+                </div>
+                <Award className="w-10 h-10 text-green-500/50" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="gradient-card border-primary/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">In Progress</p>
+                  <p className="text-3xl font-bold text-yellow-500">{inProgressCourses}</p>
+                </div>
+                <PlayCircle className="w-10 h-10 text-yellow-500/50" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="gradient-card border-primary/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Overall Progress</p>
+                  <p className="text-3xl font-bold text-primary">{overallProgress}%</p>
+                </div>
+                <GraduationCap className="w-10 h-10 text-primary/50" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Courses Section */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-primary" />
+              My Courses
+            </h2>
+            <Link to="/courses">
+              <Button variant="outline">
+                Browse More Courses
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+
+          {purchases.length === 0 ? (
+            <Card className="gradient-card border-primary/20">
+              <CardContent className="py-16 text-center">
+                <ShoppingBag className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No courses yet</h3>
+                <p className="text-muted-foreground mb-6">
+                  Start your spiritual journey by purchasing your first course
+                </p>
+                <Link to="/courses">
+                  <Button className="shadow-glow">
+                    Explore Courses
+                    <ArrowRight className="ml-2 w-4 h-4" />
+                  </Button>
                 </Link>
               </CardContent>
             </Card>
-          </div>
-        )}
-
-        <div className="space-y-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-3xl flex items-center gap-2">
-              <ShoppingBag className="w-8 h-8 text-primary" />
-              Your Purchased Courses
-            </h2>
-            <Link to="/courses">
-              <Button variant="outline">Browse More Courses</Button>
-            </Link>
-          </div>
-          
-          {purchases.length === 0 ? (
-            <Card className="gradient-card shadow-soft text-center p-12">
-              <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-2xl mb-2">No Courses Yet</h3>
-              <p className="text-muted-foreground mb-6">
-                Start your spiritual journey by purchasing a course
-              </p>
-              <Link to="/courses">
-                <Button className="shadow-glow">Browse Courses</Button>
-              </Link>
-            </Card>
           ) : (
-            <div className="grid md:grid-cols-2 gap-6">
-              {purchases.map((purchase) => (
-                <Card 
-                  key={purchase.id}
-                  className="gradient-card shadow-soft hover:shadow-medium transition-smooth"
-                >
-                  <div className="relative h-48 overflow-hidden rounded-t-lg">
-                    <img
-                      src={purchase.courses.image_url || "/placeholder.svg"}
-                      alt={purchase.courses.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <CardHeader>
-                    <CardTitle>{purchase.courses.title}</CardTitle>
-                    <CardDescription className="line-clamp-2">
-                      {purchase.courses.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>Progress</span>
-                        <span>{getProgress(purchase.courses.id)}%</span>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {purchases.map((purchase) => {
+                const courseProgress = progress[purchase.course_id];
+                const isCompleted = courseProgress?.progressPercent === 100;
+                const hasStarted = (courseProgress?.progressPercent || 0) > 0;
+
+                return (
+                  <Card 
+                    key={purchase.id} 
+                    className="gradient-card shadow-soft hover:shadow-medium transition-smooth overflow-hidden group flex flex-col"
+                  >
+                    <div className="relative h-40 overflow-hidden">
+                      <img
+                        src={purchase.courses.image_url || "/placeholder.svg"}
+                        alt={purchase.courses.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-smooth"
+                      />
+                      <div className="absolute top-3 right-3">
+                        {isCompleted ? (
+                          <Badge className="bg-green-500 text-white">
+                            <Award className="w-3 h-3 mr-1" /> Completed
+                          </Badge>
+                        ) : hasStarted ? (
+                          <Badge className="bg-yellow-500 text-white">
+                            In Progress
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-primary text-primary-foreground">
+                            Not Started
+                          </Badge>
+                        )}
                       </div>
-                      <Progress value={getProgress(purchase.courses.id)} />
                     </div>
-                    <Link to={`/courses/${purchase.courses.id}`}>
-                      <Button className="w-full">
-                        Continue Course
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              ))}
+                    <CardHeader className="pb-2 flex-grow">
+                      <CardTitle className="text-lg line-clamp-2">
+                        {purchase.courses.title}
+                      </CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {purchase.courses.description}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {/* Progress Bar */}
+                      <div className="space-y-2 mb-4">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Progress</span>
+                          <span className="font-medium text-primary">
+                            {courseProgress?.progressPercent || 0}%
+                          </span>
+                        </div>
+                        <Progress value={courseProgress?.progressPercent || 0} className="h-2" />
+                        <p className="text-xs text-muted-foreground">
+                          {courseProgress?.completedLessons || 0} of {courseProgress?.totalLessons || 0} lessons
+                        </p>
+                      </div>
+
+                      <Link to={`/courses/${purchase.course_id}`}>
+                        <Button className="w-full shadow-glow">
+                          {isCompleted ? "Review Course" : hasStarted ? "Continue Learning" : "Start Learning"}
+                          <ArrowRight className="ml-2 w-4 h-4" />
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 };
