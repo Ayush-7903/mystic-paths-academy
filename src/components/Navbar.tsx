@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
-import { Menu, X, Sparkles } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export const Navbar = () => {
@@ -33,8 +33,8 @@ export const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center space-x-2 text-xl font-bold text-primary hover:text-primary-light transition-smooth">
-            <Sparkles className="w-6 h-6" />
-            <span>Spiritual Learning</span>
+            <img src="/logo.webp" alt="Guardians of New Earth" className="w-8 h-8" />
+            <span>Guardians of New Earth</span>
           </Link>
 
           {/* Desktop Navigation */}

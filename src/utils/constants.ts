@@ -4,7 +4,7 @@
 // ============================================
 
 // App Info
-export const APP_NAME = 'Spiritual Learning Portal';
+export const APP_NAME = 'Guardians of New Earth';
 export const APP_DESCRIPTION = 'Transform your consciousness through sacred teachings';
 
 // Routes

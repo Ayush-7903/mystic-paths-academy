@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { Sparkles } from "lucide-react";
 
 export const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -11,8 +10,8 @@ export const Footer = () => {
           {/* Brand */}
           <div className="md:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
-              <Sparkles className="w-6 h-6 text-primary" />
-              <span className="text-xl font-bold">Spiritual Academy</span>
+              <img src="/logo.webp" alt="Guardians of New Earth" className="w-8 h-8" />
+              <span className="text-xl font-bold">Guardians of New Earth</span>
             </div>
             <p className="text-muted-foreground max-w-md">
               Empowering souls worldwide with sacred teachings and transformative 
@@ -66,7 +65,7 @@ export const Footer = () => {
         </div>
 
         <div className="border-t pt-8 text-center text-muted-foreground">
-          <p>&copy; {currentYear} Spiritual Academy. All rights reserved.</p>
+          <p>&copy; {currentYear} Guardians of New Earth. All rights reserved.</p>
           <p className="text-sm mt-2">
             Transforming lives through sacred wisdom and spiritual teachings.
           </p>
