@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Check } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { z } from "zod";
 
 const emailSchema = z.string().trim().email({ message: "Invalid email address" });
@@ -78,7 +78,7 @@ const Signup = () => {
 
       toast({
         title: "Account created!",
-        description: "Welcome to the Spiritual Academy. Start exploring courses!",
+        description: "Welcome to Guardians of New Earth. Start exploring courses!",
       });
       navigate("/dashboard");
     } catch (error: unknown) {
@@ -116,10 +116,10 @@ const Signup = () => {
       <Card className="w-full max-w-md gradient-card shadow-glow">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <Sparkles className="w-12 h-12 text-primary" />
+            <img src="/logo.webp" alt="Guardians of New Earth" className="w-16 h-16" />
           </div>
           <CardTitle className="text-3xl">Create Account</CardTitle>
-          <CardDescription>Join our spiritual learning community</CardDescription>
+          <CardDescription>Join Guardians of New Earth</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignup} className="space-y-4">
@@ -187,10 +187,7 @@ const Signup = () => {
                   Creating account...
                 </>
               ) : (
-                <>
-                  <Sparkles className="mr-2 w-4 h-4" />
-                  Sign Up
-                </>
+                "Sign Up"
               )}
             </Button>
 
