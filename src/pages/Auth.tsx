@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { z } from "zod";
 
 const emailSchema = z.string().trim().email({ message: "Invalid email address" });
@@ -110,7 +110,7 @@ const Auth = () => {
       <Card className="w-full max-w-md gradient-card shadow-glow">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <Sparkles className="w-12 h-12 text-primary" />
+            <img src="/logo.webp" alt="Guardians of New Earth" className="w-16 h-16" />
           </div>
           <CardTitle className="text-3xl">Welcome Back</CardTitle>
           <CardDescription>Login to continue your spiritual journey</CardDescription>
