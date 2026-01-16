@@ -4,7 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, CheckCircle, ArrowLeft, BookOpen, Lock, Award, ShoppingCart } from "lucide-react";
+import { Loader2, CheckCircle, ArrowLeft, BookOpen, Lock, Award, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "@supabase/supabase-js";
@@ -173,6 +173,14 @@ const CourseDetail = () => {
     if (!user || !id) return;
     
     try {
+      // Check subscription status
+      const { data: subData } = await supabase.functions.invoke("check-subscription");
+      if (subData?.subscribed) {
+        setHasPurchased(true);
+        return;
+      }
+      
+      // Fallback: check legacy purchases
       const { data } = await supabase
         .from("purchases")
         .select("*")
@@ -183,7 +191,7 @@ const CourseDetail = () => {
 
       if (data) setHasPurchased(true);
     } catch {
-      // Not purchased
+      // Not purchased/subscribed
     }
   };
 
@@ -461,12 +469,19 @@ const CourseDetail = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </div>
 
-                {/* Price */}
+                {/* Access Status */}
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-primary">
-                    {formatPrice(course.price_cents)}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">Lifetime access</p>
+                  {hasPurchased ? (
+                    <>
+                      <div className="text-2xl font-bold text-primary">Full Access</div>
+                      <p className="text-sm text-muted-foreground mt-1">Included in your membership</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-primary">Members Only</div>
+                      <p className="text-sm text-muted-foreground mt-1">Subscribe to unlock</p>
+                    </>
+                  )}
                 </div>
 
                 {/* Course Stats */}
