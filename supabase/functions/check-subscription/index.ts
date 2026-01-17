@@ -104,12 +104,23 @@ serve(async (req) => {
       }
       logStep("Determined subscription tier", { tier, productId });
       
+      // Safely parse member_since date
+      let memberSince: string;
+      try {
+        const startTimestamp = subscription.start_date || subscription.created;
+        memberSince = startTimestamp && typeof startTimestamp === 'number' 
+          ? new Date(startTimestamp * 1000).toISOString() 
+          : new Date().toISOString();
+      } catch {
+        memberSince = new Date().toISOString();
+      }
+      
       // Update the profiles table to mark user as member
       await supabaseClient
         .from("profiles")
         .update({ 
           is_member: true, 
-          member_since: subscription.start_date ? new Date(subscription.start_date * 1000).toISOString() : new Date().toISOString()
+          member_since: memberSince
         })
         .eq("id", user.id);
       logStep("Updated profile to member status");
