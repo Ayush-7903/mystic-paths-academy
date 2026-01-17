@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Check } from "lucide-react";
+import { Loader2, Check, Crown } from "lucide-react";
 import { z } from "zod";
 
 const emailSchema = z.string().trim().email({ message: "Invalid email address" });
@@ -159,7 +159,10 @@ const Signup = () => {
             </div>
 
             <div className="bg-primary/10 border border-primary/20 rounded-md p-4">
-              <p className="text-sm font-medium">What you get:</p>
+              <p className="text-sm font-medium flex items-center gap-2">
+                <Crown className="w-4 h-4 text-primary" />
+                Create your free account to:
+              </p>
               <ul className="text-sm text-muted-foreground mt-2 space-y-1">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-primary" />
@@ -167,15 +170,15 @@ const Signup = () => {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-primary" />
-                  Purchase individual courses
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-primary" />
-                  Lifetime access to purchased courses
+                  Subscribe to unlock full access
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-primary" />
                   Track your learning progress
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary" />
+                  Access all courses as a member
                 </li>
               </ul>
             </div>

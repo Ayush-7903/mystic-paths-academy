@@ -71,7 +71,7 @@ const CourseDetail = () => {
         setHasPurchased(true);
         toast({
           title: "Purchase successful!",
-          description: "You now have lifetime access to this course.",
+          description: "You now have access to this course.",
         });
         // Refresh data
         fetchLessons();
@@ -563,7 +563,7 @@ const CourseDetail = () => {
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-primary" />
-                        Lifetime access
+                        Full course access
                       </li>
                       <li className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-primary" />

@@ -5,21 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, BookOpen, Award, ArrowRight, ShoppingBag, GraduationCap, PlayCircle, Settings } from "lucide-react";
+import { Loader2, BookOpen, Award, ArrowRight, Crown, GraduationCap, PlayCircle, Settings, RefreshCw, Shield, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import { Footer } from "@/components/layout/Footer";
+import { useToast } from "@/hooks/use-toast";
 
-interface Purchase {
+interface Course {
   id: string;
-  course_id: string;
-  purchased_at: string;
-  courses: {
-    id: string;
-    title: string;
-    description: string;
-    image_url: string | null;
-  };
+  title: string;
+  description: string;
+  image_url: string | null;
 }
 
 interface CourseProgress {
@@ -29,14 +25,23 @@ interface CourseProgress {
   progressPercent: number;
 }
 
+interface SubscriptionStatus {
+  subscribed: boolean;
+  product_id: string | null;
+  subscription_end: string | null;
+}
+
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [progress, setProgress] = useState<Record<string, CourseProgress>>({});
   const [loading, setLoading] = useState(true);
   const [profileName, setProfileName] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -62,7 +67,7 @@ const Dashboard = () => {
       }
 
       await Promise.all([
-        fetchPurchases(session.user.id),
+        checkSubscription(),
         fetchProfile(session.user.id)
       ]);
       setLoading(false);
@@ -70,7 +75,7 @@ const Dashboard = () => {
 
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         navigate("/auth");
       } else {
@@ -78,8 +83,19 @@ const Dashboard = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => authSub.unsubscribe();
   }, [navigate]);
+
+  // Fetch courses after subscription status is known
+  useEffect(() => {
+    if (user && subscription !== null) {
+      if (subscription.subscribed) {
+        fetchAllCourses(user.id);
+      } else {
+        fetchPurchasedCourses(user.id);
+      }
+    }
+  }, [user, subscription]);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -97,14 +113,51 @@ const Dashboard = () => {
     }
   };
 
-  const fetchPurchases = async (userId: string) => {
+  const checkSubscription = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("check-subscription");
+      if (error) throw error;
+      setSubscription(data);
+    } catch (error) {
+      console.error("Error checking subscription:", error);
+      setSubscription({ subscribed: false, product_id: null, subscription_end: null });
+    }
+  };
+
+  const refreshSubscription = async () => {
+    setRefreshing(true);
+    await checkSubscription();
+    setRefreshing(false);
+    toast({
+      title: "Status refreshed",
+      description: "Your subscription status has been updated.",
+    });
+  };
+
+  const fetchAllCourses = async (userId: string) => {
+    try {
+      const { data: coursesData, error } = await supabase
+        .from("courses")
+        .select("id, title, description, image_url")
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      setCourses(coursesData || []);
+
+      if (coursesData && coursesData.length > 0) {
+        await fetchProgress(userId, coursesData);
+      }
+    } catch (error) {
+      console.error("Error fetching courses:", error);
+    }
+  };
+
+  const fetchPurchasedCourses = async (userId: string) => {
     try {
       const { data: purchasesData, error } = await supabase
         .from("purchases")
         .select(`
-          id,
           course_id,
-          purchased_at,
           courses (
             id,
             title,
@@ -113,37 +166,36 @@ const Dashboard = () => {
           )
         `)
         .eq("user_id", userId)
-        .eq("status", "completed")
-        .order("purchased_at", { ascending: false });
+        .eq("status", "completed");
 
       if (error) throw error;
       
-      const validPurchases = (purchasesData || []).filter(p => p.courses) as Purchase[];
-      setPurchases(validPurchases);
+      const validCourses = (purchasesData || [])
+        .filter(p => p.courses)
+        .map(p => p.courses as Course);
+      
+      setCourses(validCourses);
 
-      // Fetch progress for each purchased course
-      if (validPurchases.length > 0) {
-        await fetchProgress(userId, validPurchases);
+      if (validCourses.length > 0) {
+        await fetchProgress(userId, validCourses);
       }
     } catch (error) {
       console.error("Error fetching purchases:", error);
     }
   };
 
-  const fetchProgress = async (userId: string, purchasesList: Purchase[]) => {
+  const fetchProgress = async (userId: string, coursesList: Course[]) => {
     try {
       const progressData: Record<string, CourseProgress> = {};
 
-      for (const purchase of purchasesList) {
-        const courseId = purchase.course_id;
+      for (const course of coursesList) {
+        const courseId = course.id;
 
-        // Get total lessons for this course
         const { data: lessonsData } = await supabase
           .from("lessons")
           .select("id")
           .eq("course_id", courseId);
 
-        // Get completed lessons for this user
         const { data: completionsData } = await supabase
           .from("lesson_completions")
           .select("lesson_id")
@@ -151,8 +203,6 @@ const Dashboard = () => {
 
         const totalLessons = lessonsData?.length || 0;
         const completedLessonIds = new Set(completionsData?.map(c => c.lesson_id) || []);
-        
-        // Count completed lessons for this course
         const completedLessons = lessonsData?.filter(l => completedLessonIds.has(l.id)).length || 0;
         
         const progressPercent = totalLessons > 0 
@@ -173,7 +223,33 @@ const Dashboard = () => {
     }
   };
 
-  const totalCourses = purchases.length;
+  const handleManageSubscription = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("customer-portal");
+      if (error) throw error;
+
+      if (data.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to open portal";
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-AU", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  const totalCourses = courses.length;
   const completedCourses = Object.values(progress).filter(p => p.progressPercent === 100).length;
   const inProgressCourses = Object.values(progress).filter(p => p.progressPercent > 0 && p.progressPercent < 100).length;
   const overallProgress = totalCourses > 0 
@@ -206,7 +282,7 @@ const Dashboard = () => {
       >
         <div className="container mx-auto px-4">
           <h1 className="text-4xl md:text-5xl mb-2 text-white drop-shadow-lg">
-            Welcome back, {profileName || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Seeker'}!
+            Welcome back, {profileName || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Guardian'}!
           </h1>
           <p className="text-lg text-white/80">
             Continue your spiritual journey
@@ -215,6 +291,66 @@ const Dashboard = () => {
       </div>
 
       <div className="container mx-auto px-4 py-8 flex-grow">
+        {/* Subscription Status Card */}
+        <Card className={`mb-6 shadow-elegant border-2 ${subscription?.subscribed ? 'gradient-card border-primary/40' : 'bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20'}`}>
+          <CardContent className="pt-6">
+            {subscription?.subscribed ? (
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-full bg-primary/20">
+                    <Shield className="w-8 h-8 text-primary" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-bold text-primary">Guardian Member</h3>
+                      <Badge className="bg-primary/20 text-primary border-primary/30">Active</Badge>
+                    </div>
+                    <p className="text-muted-foreground flex items-center gap-2 mt-1">
+                      <Calendar className="w-4 h-4" />
+                      {subscription.subscription_end 
+                        ? `Renews on ${formatDate(subscription.subscription_end)}`
+                        : 'Full access to all courses'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleManageSubscription} variant="outline" size="sm">
+                    Manage Subscription
+                  </Button>
+                  <Button onClick={refreshSubscription} variant="ghost" size="sm" disabled={refreshing}>
+                    {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-full bg-muted">
+                    <Crown className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold">Unlock Full Access</h3>
+                    <p className="text-muted-foreground">
+                      Become a Guardian to access all courses and future content
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Link to="/membership">
+                    <Button className="shadow-glow">
+                      <Crown className="w-4 h-4 mr-2" />
+                      Become a Guardian
+                    </Button>
+                  </Link>
+                  <Button onClick={refreshSubscription} variant="ghost" size="sm" disabled={refreshing}>
+                    {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Admin Access */}
         {isAdmin && (
           <Card className="gradient-card shadow-soft border-primary mb-6">
@@ -239,10 +375,12 @@ const Dashboard = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Courses Owned</p>
+                  <p className="text-sm text-muted-foreground">
+                    {subscription?.subscribed ? 'Available Courses' : 'Courses Owned'}
+                  </p>
                   <p className="text-3xl font-bold text-primary">{totalCourses}</p>
                 </div>
-                <ShoppingBag className="w-10 h-10 text-primary/50" />
+                <BookOpen className="w-10 h-10 text-primary/50" />
               </div>
             </CardContent>
           </Card>
@@ -289,27 +427,36 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <BookOpen className="w-6 h-6 text-primary" />
-              My Courses
+              {subscription?.subscribed ? 'Your Courses' : 'My Courses'}
             </h2>
             <Link to="/courses">
               <Button variant="outline">
-                Browse More Courses
+                Browse All Courses
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
           </div>
 
-          {purchases.length === 0 ? (
+          {courses.length === 0 ? (
             <Card className="gradient-card border-primary/20">
               <CardContent className="py-16 text-center">
-                <ShoppingBag className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                <Crown className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
                 <h3 className="text-xl font-semibold mb-2">No courses yet</h3>
                 <p className="text-muted-foreground mb-6">
-                  Start your spiritual journey by purchasing your first course
+                  {subscription?.subscribed 
+                    ? "Explore our catalog to start your learning journey"
+                    : "Become a Guardian to access all our sacred teachings"}
                 </p>
-                <Link to="/courses">
+                <Link to={subscription?.subscribed ? "/courses" : "/membership"}>
                   <Button className="shadow-glow">
-                    Explore Courses
+                    {subscription?.subscribed ? (
+                      <>Explore Courses</>
+                    ) : (
+                      <>
+                        <Crown className="mr-2 w-4 h-4" />
+                        Become a Guardian
+                      </>
+                    )}
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
                 </Link>
@@ -317,20 +464,20 @@ const Dashboard = () => {
             </Card>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {purchases.map((purchase) => {
-                const courseProgress = progress[purchase.course_id];
+              {courses.map((course) => {
+                const courseProgress = progress[course.id];
                 const isCompleted = courseProgress?.progressPercent === 100;
                 const hasStarted = (courseProgress?.progressPercent || 0) > 0;
 
                 return (
                   <Card 
-                    key={purchase.id} 
+                    key={course.id} 
                     className="gradient-card shadow-soft hover:shadow-medium transition-smooth overflow-hidden group flex flex-col"
                   >
                     <div className="relative h-40 overflow-hidden">
                       <img
-                        src={purchase.courses.image_url || "/placeholder.svg"}
-                        alt={purchase.courses.title}
+                        src={course.image_url || "/placeholder.svg"}
+                        alt={course.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-smooth"
                       />
                       <div className="absolute top-3 right-3">
@@ -351,10 +498,10 @@ const Dashboard = () => {
                     </div>
                     <CardHeader className="pb-2 flex-grow">
                       <CardTitle className="text-lg line-clamp-2">
-                        {purchase.courses.title}
+                        {course.title}
                       </CardTitle>
                       <CardDescription className="line-clamp-2">
-                        {purchase.courses.description}
+                        {course.description}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
@@ -372,7 +519,7 @@ const Dashboard = () => {
                         </p>
                       </div>
 
-                      <Link to={`/courses/${purchase.course_id}`}>
+                      <Link to={`/courses/${course.id}`}>
                         <Button className="w-full shadow-glow">
                           {isCompleted ? "Review Course" : hasStarted ? "Continue Learning" : "Start Learning"}
                           <ArrowRight className="ml-2 w-4 h-4" />

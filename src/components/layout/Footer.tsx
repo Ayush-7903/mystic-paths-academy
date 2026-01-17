@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Crown } from "lucide-react";
 
 export const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -31,6 +32,12 @@ export const Footer = () => {
               <li>
                 <Link to="/courses" className="hover:text-primary transition-colors">
                   Courses
+                </Link>
+              </li>
+              <li>
+                <Link to="/membership" className="hover:text-primary transition-colors flex items-center gap-1">
+                  <Crown className="w-3 h-3" />
+                  Membership
                 </Link>
               </li>
               <li>

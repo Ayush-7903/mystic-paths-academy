@@ -5,37 +5,31 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { ArrowRight, BookOpen, Users, Award, Star, CheckCircle, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpen, Users, Award, Star, CheckCircle, Sparkles, Crown, Shield, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Course {
   id: string;
   title: string;
   image_url: string | null;
-  price_cents: number;
 }
 
 const Home = () => {
   const [featuredCourses, setFeaturedCourses] = useState<Course[]>([]);
+  const [totalCourses, setTotalCourses] = useState(0);
 
   useEffect(() => {
     fetchFeaturedCourses();
   }, []);
 
   const fetchFeaturedCourses = async () => {
-    const { data } = await supabase
+    const { data, count } = await supabase
       .from("courses")
-      .select("id, title, image_url, price_cents")
+      .select("id, title, image_url", { count: 'exact' })
       .limit(3);
     
     if (data) setFeaturedCourses(data);
-  };
-
-  const formatPrice = (cents: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(cents / 100);
+    if (count) setTotalCourses(count);
   };
 
   return (
@@ -64,15 +58,15 @@ const Home = () => {
             Transform your consciousness through sacred teachings and spiritual activations
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/courses">
+            <Link to="/membership">
               <Button size="lg" className="shadow-glow text-lg px-8">
-                Explore Courses
-                <ArrowRight className="ml-2 w-5 h-5" />
+                <Crown className="mr-2 w-5 h-5" />
+                Become a Guardian
               </Button>
             </Link>
-            <Link to="/signup">
+            <Link to="/courses">
               <Button size="lg" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-white/30 text-lg px-8">
-                Start Your Journey
+                Explore Courses
               </Button>
             </Link>
           </div>
@@ -85,7 +79,7 @@ const Home = () => {
           <div className="flex flex-wrap justify-center gap-8 text-center">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-primary" />
-              <span className="text-sm font-medium">Lifetime Access</span>
+              <span className="text-sm font-medium">Unlimited Access</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-primary" />
@@ -97,8 +91,48 @@ const Home = () => {
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-primary" />
-              <span className="text-sm font-medium">Progress Tracking</span>
+              <span className="text-sm font-medium">Cancel Anytime</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Membership Highlight */}
+      <section className="py-20 bg-gradient-to-b from-background to-primary/5">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
+              <Crown className="w-3 h-3 mr-1" /> Guardian Membership
+            </Badge>
+            <h2 className="text-4xl md:text-5xl mb-4">
+              One Membership, Complete Access
+            </h2>
+            <p className="text-xl text-muted-foreground mb-8">
+              Unlock all {totalCourses}+ courses and future teachings with a single subscription
+            </p>
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <Card className="gradient-card p-6 text-center">
+                <BookOpen className="w-10 h-10 text-primary mx-auto mb-3" />
+                <h3 className="font-semibold mb-2">All Courses</h3>
+                <p className="text-sm text-muted-foreground">Access every teaching in our library</p>
+              </Card>
+              <Card className="gradient-card p-6 text-center">
+                <RefreshCw className="w-10 h-10 text-primary mx-auto mb-3" />
+                <h3 className="font-semibold mb-2">Regular Updates</h3>
+                <p className="text-sm text-muted-foreground">New content added frequently</p>
+              </Card>
+              <Card className="gradient-card p-6 text-center">
+                <Shield className="w-10 h-10 text-primary mx-auto mb-3" />
+                <h3 className="font-semibold mb-2">Flexible Plans</h3>
+                <p className="text-sm text-muted-foreground">Monthly or yearly, cancel anytime</p>
+              </Card>
+            </div>
+            <Link to="/membership">
+              <Button size="lg" className="shadow-glow">
+                View Membership Plans
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -163,7 +197,7 @@ const Home = () => {
                 Popular Courses
               </h2>
               <p className="text-xl text-muted-foreground">
-                Start your transformation with our most popular teachings
+                Preview our most popular teachings
               </p>
             </div>
             <div className="grid md:grid-cols-3 gap-8">
@@ -176,9 +210,10 @@ const Home = () => {
                         alt={course.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-smooth"
                       />
-                      <div className="absolute top-3 right-3">
-                        <Badge className="bg-background/90 text-foreground font-bold">
-                          {formatPrice(course.price_cents)}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute bottom-3 left-3">
+                        <Badge className="bg-primary/90 text-primary-foreground">
+                          <Crown className="w-3 h-3 mr-1" /> Members Only
                         </Badge>
                       </div>
                     </div>
@@ -197,9 +232,14 @@ const Home = () => {
             </div>
             <div className="text-center mt-12">
               <Link to="/courses">
-                <Button size="lg" className="shadow-glow">
+                <Button size="lg" variant="outline" className="mr-4">
                   View All Courses
-                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+              </Link>
+              <Link to="/membership">
+                <Button size="lg" className="shadow-glow">
+                  <Crown className="mr-2 w-5 h-5" />
+                  Get Full Access
                 </Button>
               </Link>
             </div>
@@ -224,15 +264,15 @@ const Home = () => {
             Join thousands of souls who have discovered their divine purpose through our transformative courses
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup">
+            <Link to="/membership">
               <Button size="lg" className="shadow-glow text-lg px-8">
-                Create Free Account
-                <ArrowRight className="ml-2 w-5 h-5" />
+                <Crown className="mr-2 w-5 h-5" />
+                Become a Guardian
               </Button>
             </Link>
-            <Link to="/courses">
+            <Link to="/signup">
               <Button size="lg" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-white/30 text-lg px-8">
-                Browse Courses
+                Create Free Account
               </Button>
             </Link>
           </div>
