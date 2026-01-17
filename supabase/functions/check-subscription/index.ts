@@ -89,10 +89,25 @@ serve(async (req) => {
 
     if (hasActiveSub) {
       const subscription = subscriptions.data[0];
-      subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+      logStep("Processing subscription", { 
+        subscriptionId: subscription.id, 
+        currentPeriodEnd: subscription.current_period_end,
+        created: subscription.created
+      });
+      
+      // Safely parse subscription end date
+      try {
+        if (subscription.current_period_end && typeof subscription.current_period_end === 'number') {
+          subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+        }
+      } catch (dateError) {
+        logStep("Error parsing current_period_end", { error: String(dateError) });
+        subscriptionEnd = null;
+      }
+      
       logStep("Active subscription found", { subscriptionId: subscription.id, endDate: subscriptionEnd });
       
-      const productId = subscription.items.data[0].price.product as string;
+      const productId = subscription.items.data[0]?.price?.product as string;
       
       // Determine tier based on product ID
       if (productId === SUBSCRIPTION_TIERS.monthly.product_id) {
@@ -105,14 +120,14 @@ serve(async (req) => {
       logStep("Determined subscription tier", { tier, productId });
       
       // Safely parse member_since date
-      let memberSince: string;
+      let memberSince: string = new Date().toISOString();
       try {
-        const startTimestamp = subscription.start_date || subscription.created;
-        memberSince = startTimestamp && typeof startTimestamp === 'number' 
-          ? new Date(startTimestamp * 1000).toISOString() 
-          : new Date().toISOString();
-      } catch {
-        memberSince = new Date().toISOString();
+        const startTimestamp = subscription.start_date ?? subscription.created;
+        if (startTimestamp && typeof startTimestamp === 'number') {
+          memberSince = new Date(startTimestamp * 1000).toISOString();
+        }
+      } catch (dateError) {
+        logStep("Error parsing member_since date", { error: String(dateError) });
       }
       
       // Update the profiles table to mark user as member
