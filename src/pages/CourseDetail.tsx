@@ -508,21 +508,11 @@ const CourseDetail = () => {
                   ) : (
                     <Button 
                       className="w-full shadow-glow hover:shadow-glow-lg transition-all duration-300" 
-                      onClick={handlePurchase}
-                      disabled={purchasing}
+                      onClick={() => navigate("/membership")}
                       size="lg"
                     >
-                      {purchasing ? (
-                        <>
-                          <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingCart className="mr-2 w-4 h-4" />
-                          Buy This Course
-                        </>
-                      )}
+                      <Crown className="mr-2 w-4 h-4" />
+                      Become a Guardian
                     </Button>
                   )
                 ) : (
@@ -532,8 +522,8 @@ const CourseDetail = () => {
                       onClick={() => navigate("/signup")}
                       size="lg"
                     >
-                      <ShoppingCart className="mr-2 w-4 h-4" />
-                      Sign Up to Purchase
+                      <Crown className="mr-2 w-4 h-4" />
+                      Sign Up to Subscribe
                     </Button>
                     <p className="text-center text-sm text-muted-foreground">
                       Already have an account?{" "}
