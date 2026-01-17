@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Crown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export const Navbar = () => {
@@ -44,6 +44,10 @@ export const Navbar = () => {
             </Link>
             <Link to="/courses" className="text-foreground hover:text-primary transition-smooth">
               Courses
+            </Link>
+            <Link to="/membership" className="text-foreground hover:text-primary transition-smooth flex items-center gap-1">
+              <Crown className="w-4 h-4" />
+              Membership
             </Link>
             {user && (
               <Link to="/dashboard" className="text-foreground hover:text-primary transition-smooth">
@@ -95,6 +99,14 @@ export const Navbar = () => {
               onClick={() => setIsMenuOpen(false)}
             >
               Courses
+            </Link>
+            <Link
+              to="/membership"
+              className="block text-foreground hover:text-primary transition-smooth flex items-center gap-1"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <Crown className="w-4 h-4" />
+              Membership
             </Link>
             {user && (
               <Link
