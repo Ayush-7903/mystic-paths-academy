@@ -71,10 +71,16 @@ const Membership = () => {
   const checkSubscription = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("check-subscription");
-      if (error) throw error;
-      setSubscription(data);
+      if (error) {
+        console.error("Error checking subscription:", error);
+        // If there's an error, we still show the pricing - user can try to subscribe
+        setSubscription({ subscribed: false, tier: null, subscription_end: null });
+      } else {
+        setSubscription(data);
+      }
     } catch (error) {
       console.error("Error checking subscription:", error);
+      setSubscription({ subscribed: false, tier: null, subscription_end: null });
     } finally {
       setLoading(false);
     }
@@ -102,13 +108,35 @@ const Membership = () => {
         body: { tier },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Parse error message for "already subscribed" case
+        const errorMessage = error.message || "";
+        if (errorMessage.includes("already have an active subscription")) {
+          // User is already subscribed - refresh status and show their subscription
+          await checkSubscription();
+          toast({
+            title: "Already Subscribed",
+            description: "You already have an active membership. Refreshing your status...",
+          });
+          return;
+        }
+        throw error;
+      }
 
       if (data.url) {
         window.open(data.url, "_blank");
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to start checkout";
+      // Check if error contains "already subscribed" message
+      if (message.includes("already have an active subscription")) {
+        await checkSubscription();
+        toast({
+          title: "Already Subscribed", 
+          description: "You already have an active membership. Refreshing your status...",
+        });
+        return;
+      }
       toast({
         title: "Checkout failed",
         description: message,
