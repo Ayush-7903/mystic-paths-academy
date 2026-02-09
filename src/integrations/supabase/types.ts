@@ -156,6 +156,7 @@ export type Database = {
           id: string
           is_member: boolean | null
           member_since: string | null
+          paypal_subscription_id: string | null
           updated_at: string
         }
         Insert: {
@@ -164,6 +165,7 @@ export type Database = {
           id: string
           is_member?: boolean | null
           member_since?: string | null
+          paypal_subscription_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -172,6 +174,7 @@ export type Database = {
           id?: string
           is_member?: boolean | null
           member_since?: string | null
+          paypal_subscription_id?: string | null
           updated_at?: string
         }
         Relationships: []
