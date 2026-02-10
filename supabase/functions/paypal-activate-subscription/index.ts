@@ -8,13 +8,17 @@ const corsHeaders = {
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[PAYPAL-ACTIVATE-SUBSCRIPTION] ${step}${detailsStr}`);
+  console.log(`[PAYPAL-CAPTURE-ORDER] ${step}${detailsStr}`);
 };
 
-// PayPal API endpoints
 const PAYPAL_BASE_URL = Deno.env.get("PAYPAL_MODE") === "live" 
   ? "https://api-m.paypal.com" 
   : "https://api-m.sandbox.paypal.com";
+
+const TIER_DURATIONS: Record<string, number> = {
+  monthly: 30,
+  yearly: 365,
+};
 
 async function getPayPalAccessToken(): Promise<string> {
   const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
@@ -52,13 +56,16 @@ serve(async (req) => {
   try {
     logStep("Function started");
     
-    const { subscriptionId, tier } = await req.json();
+    const { orderId, tier } = await req.json();
     
-    if (!subscriptionId) {
-      throw new Error("Missing subscriptionId");
+    if (!orderId) {
+      throw new Error("Missing orderId");
+    }
+    if (!tier || !TIER_DURATIONS[tier]) {
+      throw new Error("Invalid tier");
     }
     
-    logStep("Activating subscription", { subscriptionId, tier });
+    logStep("Capturing order", { orderId, tier });
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -78,39 +85,42 @@ serve(async (req) => {
 
     logStep("User authenticated", { userId: user.id });
 
-    // Verify the subscription with PayPal
+    // Capture the PayPal order
     const accessToken = await getPayPalAccessToken();
-    const response = await fetch(`${PAYPAL_BASE_URL}/v1/billing/subscriptions/${subscriptionId}`, {
+    const captureResponse = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`, {
+      method: "POST",
       headers: {
         "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to verify subscription with PayPal: ${error}`);
+    if (!captureResponse.ok) {
+      const error = await captureResponse.text();
+      throw new Error(`Failed to capture PayPal order: ${error}`);
     }
 
-    const subscription = await response.json();
-    logStep("Subscription verified with PayPal", { 
-      status: subscription.status,
-      planId: subscription.plan_id 
-    });
+    const captureData = await captureResponse.json();
+    logStep("Order captured", { status: captureData.status });
 
-    if (subscription.status !== "ACTIVE" && subscription.status !== "APPROVED") {
-      throw new Error(`Subscription is not active. Status: ${subscription.status}`);
+    if (captureData.status !== "COMPLETED") {
+      throw new Error(`Payment not completed. Status: ${captureData.status}`);
     }
 
-    // Update user profile with subscription info
-    const memberSince = subscription.start_time || new Date().toISOString();
-    
+    // Calculate expiry date
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + TIER_DURATIONS[tier]);
+
+    // Update user profile
     const { error: updateError } = await supabaseClient
       .from("profiles")
       .update({ 
         is_member: true,
-        member_since: memberSince,
-        paypal_subscription_id: subscriptionId
+        member_since: now.toISOString(),
+        membership_expires_at: expiresAt.toISOString(),
+        membership_tier: tier,
+        paypal_subscription_id: orderId, // Store order ID for reference
       })
       .eq("id", user.id);
 
@@ -119,13 +129,13 @@ serve(async (req) => {
       throw new Error(`Failed to update profile: ${updateError.message}`);
     }
 
-    logStep("Profile updated successfully");
+    logStep("Profile updated successfully", { expiresAt: expiresAt.toISOString() });
 
     return new Response(JSON.stringify({ 
       success: true,
       subscribed: true,
       tier,
-      subscription_end: subscription.billing_info?.next_billing_time || null
+      subscription_end: expiresAt.toISOString(),
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

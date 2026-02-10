@@ -8,23 +8,23 @@ const corsHeaders = {
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[PAYPAL-CREATE-SUBSCRIPTION] ${step}${detailsStr}`);
+  console.log(`[PAYPAL-CREATE-ORDER] ${step}${detailsStr}`);
 };
 
-// PayPal API endpoints
 const PAYPAL_BASE_URL = Deno.env.get("PAYPAL_MODE") === "live" 
   ? "https://api-m.paypal.com" 
   : "https://api-m.sandbox.paypal.com";
 
-// Subscription plan IDs - these need to be created in PayPal Dashboard
-const SUBSCRIPTION_PLANS: Record<string, { plan_id: string; name: string }> = {
+const TIER_PRICES: Record<string, { amount: string; description: string; duration_days: number }> = {
   monthly: {
-    plan_id: Deno.env.get("PAYPAL_MONTHLY_PLAN_ID") || "",
-    name: "Guardian Codex Access - Monthly",
+    amount: "30.00",
+    description: "Guardian Codex Access - 1 Month",
+    duration_days: 30,
   },
   yearly: {
-    plan_id: Deno.env.get("PAYPAL_YEARLY_PLAN_ID") || "",
-    name: "Guardian Codex Access - Yearly",
+    amount: "300.00",
+    description: "Guardian Codex Access - 1 Year",
+    duration_days: 365,
   },
 };
 
@@ -66,16 +66,12 @@ serve(async (req) => {
     
     const { tier } = await req.json();
     
-    if (!tier || !SUBSCRIPTION_PLANS[tier]) {
+    if (!tier || !TIER_PRICES[tier]) {
       throw new Error("Invalid tier. Must be 'monthly' or 'yearly'");
     }
 
-    const planId = SUBSCRIPTION_PLANS[tier].plan_id;
-    if (!planId) {
-      throw new Error(`PayPal plan ID not configured for tier: ${tier}. Please set PAYPAL_${tier.toUpperCase()}_PLAN_ID in secrets.`);
-    }
-    
-    logStep("Tier selected", { tier, planId });
+    const tierConfig = TIER_PRICES[tier];
+    logStep("Tier selected", { tier, amount: tierConfig.amount });
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -94,7 +90,7 @@ serve(async (req) => {
 
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // Check if user already has an active subscription
+    // Check if user already has active membership
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -103,38 +99,64 @@ serve(async (req) => {
 
     const { data: profile } = await serviceClient
       .from("profiles")
-      .select("is_member, paypal_subscription_id")
+      .select("is_member, membership_expires_at")
       .eq("id", user.id)
       .single();
 
-    if (profile?.is_member && profile?.paypal_subscription_id) {
-      // Verify the subscription is still active in PayPal
-      const accessToken = await getPayPalAccessToken();
-      const response = await fetch(`${PAYPAL_BASE_URL}/v1/billing/subscriptions/${profile.paypal_subscription_id}`, {
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      });
-      
-      if (response.ok) {
-        const subscription = await response.json();
-        if (subscription.status === "ACTIVE") {
-          throw new Error("You already have an active subscription. Please manage it from your dashboard.");
-        }
+    if (profile?.is_member && profile?.membership_expires_at) {
+      const expiresAt = new Date(profile.membership_expires_at);
+      if (expiresAt > new Date()) {
+        throw new Error("You already have an active membership. It expires on " + expiresAt.toLocaleDateString());
       }
     }
 
-    // Get PayPal Client ID to return to frontend
-    const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
+    // Create PayPal order
+    const accessToken = await getPayPalAccessToken();
     
-    // Return the plan ID and client ID - the actual subscription creation
-    // happens on the frontend using PayPal JS SDK
+    const origin = req.headers.get("origin") || "https://guardiansofearth.lovable.app";
+    
+    const orderResponse = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        intent: "CAPTURE",
+        purchase_units: [{
+          amount: {
+            currency_code: "AUD",
+            value: tierConfig.amount,
+          },
+          description: tierConfig.description,
+          custom_id: JSON.stringify({ userId: user.id, tier }),
+        }],
+        application_context: {
+          brand_name: "Guardian Codex",
+          landing_page: "NO_PREFERENCE",
+          user_action: "PAY_NOW",
+          return_url: `${origin}/membership?payment=success&tier=${tier}`,
+          cancel_url: `${origin}/membership?payment=cancelled`,
+        },
+      }),
+    });
+
+    if (!orderResponse.ok) {
+      const error = await orderResponse.text();
+      logStep("PayPal order creation failed", { error });
+      throw new Error(`Failed to create PayPal order: ${error}`);
+    }
+
+    const order = await orderResponse.json();
+    logStep("PayPal order created", { orderId: order.id, status: order.status });
+
+    // Find approval URL
+    const approvalUrl = order.links?.find((link: { rel: string; href: string }) => link.rel === "approve")?.href;
+
     return new Response(JSON.stringify({ 
-      planId,
-      clientId,
-      userId: user.id,
-      tier
+      orderId: order.id,
+      approvalUrl,
+      tier,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
