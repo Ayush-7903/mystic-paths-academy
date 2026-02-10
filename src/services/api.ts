@@ -151,14 +151,22 @@ export const purchaseService = {
 
 export const roleService = {
   async checkAdminRole(userId: string): Promise<boolean> {
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-    
-    return !!data;
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error checking admin role:', error);
+        return false;
+      }
+      return !!data;
+    } catch {
+      return false;
+    }
   },
 
   async getUserRoles(userId: string): Promise<UserRole[]> {
