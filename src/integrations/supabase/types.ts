@@ -156,6 +156,8 @@ export type Database = {
           id: string
           is_member: boolean | null
           member_since: string | null
+          membership_expires_at: string | null
+          membership_tier: string | null
           paypal_subscription_id: string | null
           updated_at: string
         }
@@ -165,6 +167,8 @@ export type Database = {
           id: string
           is_member?: boolean | null
           member_since?: string | null
+          membership_expires_at?: string | null
+          membership_tier?: string | null
           paypal_subscription_id?: string | null
           updated_at?: string
         }
@@ -174,6 +178,8 @@ export type Database = {
           id?: string
           is_member?: boolean | null
           member_since?: string | null
+          membership_expires_at?: string | null
+          membership_tier?: string | null
           paypal_subscription_id?: string | null
           updated_at?: string
         }

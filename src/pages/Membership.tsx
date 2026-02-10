@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -14,40 +14,17 @@ interface SubscriptionStatus {
   subscribed: boolean;
   tier: string | null;
   subscription_end: string | null;
-}
-
-interface PayPalSubscriptionData {
-  planId: string;
-  clientId: string;
-  userId: string;
-  tier: string;
+  expired?: boolean;
 }
 
 const MEMBERSHIP_FEATURES = [
   "Access to all current teachings and courses",
   "New content added regularly",
-  "Future updates included while subscribed",
+  "Future updates included during membership",
   "Full access to the Guardian Codex",
   "Track your learning progress",
-  "Cancel anytime",
+  "Renew anytime after expiry",
 ];
-
-// PayPal SDK loader
-const loadPayPalScript = (clientId: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (document.getElementById("paypal-sdk")) {
-      resolve();
-      return;
-    }
-    
-    const script = document.createElement("script");
-    script.id = "paypal-sdk";
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&vault=true&intent=subscription`;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load PayPal SDK"));
-    document.body.appendChild(script);
-  });
-};
 
 const Membership = () => {
   const navigate = useNavigate();
@@ -56,10 +33,7 @@ const Membership = () => {
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<"monthly" | "yearly" | null>(null);
-  const [paypalData, setPaypalData] = useState<PayPalSubscriptionData | null>(null);
-  const [paypalLoading, setPaypalLoading] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [processingTier, setProcessingTier] = useState<"monthly" | "yearly" | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -82,32 +56,25 @@ const Membership = () => {
     return () => authSub.unsubscribe();
   }, []);
 
-  // Handle subscription status from URL
+  // Handle payment status from URL (return from PayPal)
   useEffect(() => {
-    const status = searchParams.get("subscription");
-    if (status === "cancelled") {
+    const payment = searchParams.get("payment");
+    const token = searchParams.get("token"); // PayPal order ID
+    const tierParam = searchParams.get("tier");
+
+    if (payment === "success" && token && tierParam) {
+      // Capture the order
+      captureOrder(token, tierParam);
+      navigate("/membership", { replace: true });
+    } else if (payment === "cancelled") {
       toast({
-        title: "Checkout cancelled",
-        description: "You can subscribe anytime you're ready.",
+        title: "Payment cancelled",
+        description: "You can purchase anytime you're ready.",
         variant: "destructive",
       });
       navigate("/membership", { replace: true });
-    } else if (status === "success") {
-      toast({
-        title: "Subscription activated!",
-        description: "Welcome to the Guardian Codex. Enjoy your access!",
-      });
-      checkSubscription();
-      navigate("/membership", { replace: true });
     }
   }, [searchParams]);
-
-  // Initialize PayPal buttons when data is available
-  useEffect(() => {
-    if (paypalData && selectedTier) {
-      initializePayPalButtons(paypalData, selectedTier);
-    }
-  }, [paypalData, selectedTier]);
 
   const checkSubscription = async () => {
     try {
@@ -117,6 +84,13 @@ const Membership = () => {
         setSubscription({ subscribed: false, tier: null, subscription_end: null });
       } else {
         setSubscription(data);
+        if (data?.expired) {
+          toast({
+            title: "Membership Expired",
+            description: "Your membership has expired. Renew to continue accessing content.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error("Error checking subscription:", error);
@@ -132,108 +106,45 @@ const Membership = () => {
     setRefreshing(false);
     toast({
       title: "Status refreshed",
-      description: "Your subscription status has been updated.",
+      description: "Your membership status has been updated.",
     });
   };
 
-  const initializePayPalButtons = useCallback(async (data: PayPalSubscriptionData, tier: "monthly" | "yearly") => {
+  const captureOrder = async (orderId: string, tier: string) => {
     try {
-      setPaypalLoading(true);
-      await loadPayPalScript(data.clientId);
-      
-      const containerId = `paypal-button-container-${tier}`;
-      const container = document.getElementById(containerId);
-      
-      if (!container) {
-        console.error("PayPal button container not found");
-        return;
+      const { data, error } = await supabase.functions.invoke("paypal-activate-subscription", {
+        body: { orderId, tier },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: "Payment successful!",
+          description: "Welcome to the Guardian Codex. Enjoy your access!",
+        });
+        await checkSubscription();
+      } else {
+        throw new Error("Payment capture failed");
       }
-      
-      // Clear existing buttons
-      container.innerHTML = "";
-      
-      // @ts-expect-error - PayPal SDK loaded dynamically
-      window.paypal.Buttons({
-        style: {
-          shape: "rect",
-          color: "gold",
-          layout: "vertical",
-          label: "subscribe",
-        },
-        createSubscription: function(_data: unknown, actions: { subscription: { create: (options: { plan_id: string }) => Promise<string> } }) {
-          return actions.subscription.create({
-            plan_id: data.planId,
-          });
-        },
-        onApprove: async function(approvalData: { subscriptionID: string }) {
-          try {
-            // Activate subscription in backend
-            const { error } = await supabase.functions.invoke("paypal-activate-subscription", {
-              body: { 
-                subscriptionId: approvalData.subscriptionID,
-                tier 
-              },
-            });
-            
-            if (error) {
-              throw error;
-            }
-            
-            toast({
-              title: "Subscription activated!",
-              description: "Welcome to the Guardian Codex. Enjoy your access!",
-            });
-            
-            setSelectedTier(null);
-            setPaypalData(null);
-            await checkSubscription();
-          } catch (error) {
-            console.error("Error activating subscription:", error);
-            toast({
-              title: "Activation failed",
-              description: "Please contact support if your payment was processed.",
-              variant: "destructive",
-            });
-          }
-        },
-        onError: function(err: Error) {
-          console.error("PayPal error:", err);
-          toast({
-            title: "Payment error",
-            description: "There was an issue with PayPal. Please try again.",
-            variant: "destructive",
-          });
-        },
-        onCancel: function() {
-          toast({
-            title: "Payment cancelled",
-            description: "You can subscribe anytime you're ready.",
-          });
-          setSelectedTier(null);
-          setPaypalData(null);
-        },
-      }).render(`#${containerId}`);
-      
     } catch (error) {
-      console.error("Error initializing PayPal:", error);
+      console.error("Error capturing order:", error);
       toast({
-        title: "PayPal error",
-        description: "Failed to load PayPal. Please refresh and try again.",
+        title: "Payment verification failed",
+        description: "Please contact support if your payment was processed.",
         variant: "destructive",
       });
-    } finally {
-      setPaypalLoading(false);
     }
-  }, [toast]);
+  };
 
-  const handleSubscribe = async (tier: "monthly" | "yearly") => {
+  const handlePurchase = async (tier: "monthly" | "yearly") => {
     if (!user) {
       navigate("/auth");
       return;
     }
 
-    setSelectedTier(tier);
-    
+    setProcessingTier(tier);
+
     try {
       const { data, error } = await supabase.functions.invoke("paypal-create-subscription", {
         body: { tier },
@@ -241,23 +152,27 @@ const Membership = () => {
 
       if (error) {
         const errorMessage = error.message || "";
-        if (errorMessage.includes("already have an active subscription")) {
+        if (errorMessage.includes("already have an active membership")) {
           await checkSubscription();
           toast({
-            title: "Already Subscribed",
+            title: "Already Active",
             description: "You already have an active membership.",
           });
-          setSelectedTier(null);
+          setProcessingTier(null);
           return;
         }
         throw error;
       }
 
-      if (!data.planId) {
-        throw new Error("PayPal plan not configured. Please contact support.");
+      if (!data.approvalUrl) {
+        throw new Error("Failed to create PayPal order. Please try again.");
       }
 
-      setPaypalData(data);
+      // Redirect to PayPal for payment
+      // Append tier to return URL so we know which tier to activate
+      const approvalUrl = new URL(data.approvalUrl);
+      // We'll pass tier via the return URL instead
+      window.location.href = data.approvalUrl;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to start checkout";
       toast({
@@ -265,32 +180,7 @@ const Membership = () => {
         description: message,
         variant: "destructive",
       });
-      setSelectedTier(null);
-    }
-  };
-
-  const handleCancelSubscription = async () => {
-    setCancelling(true);
-    try {
-      const { error } = await supabase.functions.invoke("paypal-cancel-subscription");
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Subscription cancelled",
-        description: "Your subscription has been cancelled. You'll retain access until the end of your billing period.",
-      });
-      
-      await checkSubscription();
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Failed to cancel subscription";
-      toast({
-        title: "Cancellation failed",
-        description: message,
-        variant: "destructive",
-      });
-    } finally {
-      setCancelling(false);
+      setProcessingTier(null);
     }
   };
 
@@ -301,6 +191,9 @@ const Membership = () => {
       day: "numeric",
     });
   };
+
+  const isExpired = subscription?.expired || 
+    (subscription?.subscription_end && new Date(subscription.subscription_end) < new Date());
 
   if (loading) {
     return (
@@ -336,8 +229,8 @@ const Membership = () => {
           </div>
         </section>
 
-        {/* Current Subscription Status */}
-        {subscription?.subscribed && (
+        {/* Current Membership Status */}
+        {subscription?.subscribed && !isExpired && (
           <section className="pb-12">
             <div className="container mx-auto px-4">
               <Card className="gradient-card shadow-elegant border-primary/30 max-w-2xl mx-auto">
@@ -359,25 +252,11 @@ const Membership = () => {
                     </p>
                     {subscription.subscription_end && (
                       <p className="text-muted-foreground">
-                        Renews on: {formatDate(subscription.subscription_end)}
+                        Expires on: {formatDate(subscription.subscription_end)}
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <Button 
-                      onClick={handleCancelSubscription} 
-                      variant="outline"
-                      disabled={cancelling}
-                    >
-                      {cancelling ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Cancelling...
-                        </>
-                      ) : (
-                        "Cancel Subscription"
-                      )}
-                    </Button>
+                  <div className="flex justify-center">
                     <Button onClick={refreshSubscription} variant="ghost" disabled={refreshing}>
                       {refreshing ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -393,8 +272,27 @@ const Membership = () => {
           </section>
         )}
 
-        {/* Pricing Cards */}
-        {!subscription?.subscribed && (
+        {/* Expired Notice */}
+        {isExpired && (
+          <section className="pb-8">
+            <div className="container mx-auto px-4">
+              <Card className="border-amber-500/30 bg-amber-500/5 max-w-2xl mx-auto">
+                <CardContent className="flex items-start gap-3 p-6">
+                  <AlertCircle className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-500 mb-1">Membership Expired</p>
+                    <p className="text-muted-foreground">
+                      Your membership has expired. Choose a plan below to renew your access.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        )}
+
+        {/* Pricing Cards - show when not subscribed or expired */}
+        {(!subscription?.subscribed || isExpired) && (
           <section className="py-12">
             <div className="container mx-auto px-4">
               <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -407,7 +305,7 @@ const Membership = () => {
                   <CardContent className="space-y-6">
                     <div className="text-center">
                       <div className="text-5xl font-bold text-primary">$30</div>
-                      <p className="text-muted-foreground">AUD per month</p>
+                      <p className="text-muted-foreground">AUD for 1 month</p>
                     </div>
                     <ul className="space-y-3">
                       {MEMBERSHIP_FEATURES.map((feature, index) => (
@@ -417,47 +315,24 @@ const Membership = () => {
                         </li>
                       ))}
                     </ul>
-                    
-                    {selectedTier === "monthly" && paypalData ? (
-                      <div className="space-y-4">
-                        {paypalLoading && (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                            <span className="ml-2 text-sm text-muted-foreground">Loading PayPal...</span>
-                          </div>
-                        )}
-                        <div id="paypal-button-container-monthly" className="min-h-[150px]"></div>
-                        <Button
-                          onClick={() => {
-                            setSelectedTier(null);
-                            setPaypalData(null);
-                          }}
-                          variant="ghost"
-                          className="w-full"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => handleSubscribe("monthly")}
-                        className="w-full shadow-glow"
-                        size="lg"
-                        disabled={selectedTier !== null}
-                      >
-                        {selectedTier === "monthly" ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4 mr-2" />
-                            Subscribe Monthly
-                          </>
-                        )}
-                      </Button>
-                    )}
+                    <Button
+                      onClick={() => handlePurchase("monthly")}
+                      className="w-full shadow-glow"
+                      size="lg"
+                      disabled={processingTier !== null}
+                    >
+                      {processingTier === "monthly" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Redirecting to PayPal...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          {isExpired ? "Renew Monthly" : "Get Monthly Access"}
+                        </>
+                      )}
+                    </Button>
                   </CardContent>
                 </Card>
 
@@ -473,7 +348,7 @@ const Membership = () => {
                   <CardContent className="space-y-6">
                     <div className="text-center">
                       <div className="text-5xl font-bold text-primary">$300</div>
-                      <p className="text-muted-foreground">AUD per year</p>
+                      <p className="text-muted-foreground">AUD for 1 year</p>
                       <p className="text-sm text-primary mt-1">That's only $25/month!</p>
                     </div>
                     <ul className="space-y-3">
@@ -484,52 +359,29 @@ const Membership = () => {
                         </li>
                       ))}
                     </ul>
-                    
-                    {selectedTier === "yearly" && paypalData ? (
-                      <div className="space-y-4">
-                        {paypalLoading && (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                            <span className="ml-2 text-sm text-muted-foreground">Loading PayPal...</span>
-                          </div>
-                        )}
-                        <div id="paypal-button-container-yearly" className="min-h-[150px]"></div>
-                        <Button
-                          onClick={() => {
-                            setSelectedTier(null);
-                            setPaypalData(null);
-                          }}
-                          variant="ghost"
-                          className="w-full"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => handleSubscribe("yearly")}
-                        className="w-full shadow-glow"
-                        size="lg"
-                        disabled={selectedTier !== null}
-                      >
-                        {selectedTier === "yearly" ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <Crown className="w-4 h-4 mr-2" />
-                            Subscribe Yearly
-                          </>
-                        )}
-                      </Button>
-                    )}
+                    <Button
+                      onClick={() => handlePurchase("yearly")}
+                      className="w-full shadow-glow"
+                      size="lg"
+                      disabled={processingTier !== null}
+                    >
+                      {processingTier === "yearly" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Redirecting to PayPal...
+                        </>
+                      ) : (
+                        <>
+                          <Crown className="w-4 h-4 mr-2" />
+                          {isExpired ? "Renew Yearly" : "Get Yearly Access"}
+                        </>
+                      )}
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Setup Notice */}
+              {/* Sandbox Notice */}
               <div className="max-w-2xl mx-auto mt-8">
                 <Card className="border-amber-500/30 bg-amber-500/5">
                   <CardContent className="flex items-start gap-3 p-4">
@@ -538,8 +390,7 @@ const Membership = () => {
                       <p className="font-medium text-amber-500 mb-1">PayPal Sandbox Mode</p>
                       <p>
                         This integration is running in PayPal sandbox (test) mode. 
-                        To complete setup, you need to create subscription plans in your PayPal Developer Dashboard 
-                        and add the plan IDs as secrets (PAYPAL_MONTHLY_PLAN_ID and PAYPAL_YEARLY_PLAN_ID).
+                        Use sandbox test accounts to make payments.
                       </p>
                     </div>
                   </CardContent>
@@ -555,7 +406,7 @@ const Membership = () => {
                   <Button variant="link" onClick={() => navigate("/signup")} className="text-primary">
                     create an account
                   </Button>
-                  {" "}to subscribe
+                  {" "}to purchase
                 </p>
               )}
             </div>
@@ -583,9 +434,9 @@ const Membership = () => {
               </Card>
               <Card className="gradient-card shadow-soft text-center p-6">
                 <Shield className="w-12 h-12 text-primary mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Cancel Anytime</h3>
+                <h3 className="text-xl font-semibold mb-2">Easy Renewal</h3>
                 <p className="text-muted-foreground">
-                  No lock-in contracts. Cancel your subscription whenever you need
+                  Simply renew when your membership expires to continue access
                 </p>
               </Card>
             </div>
