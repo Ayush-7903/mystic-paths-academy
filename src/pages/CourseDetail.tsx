@@ -173,7 +173,14 @@ const CourseDetail = () => {
     if (!user || !id) return;
     
     try {
-      // Check subscription status
+      // Check PayPal membership status
+      const { data: paypalData } = await supabase.functions.invoke("paypal-check-subscription");
+      if (paypalData?.subscribed) {
+        setHasPurchased(true);
+        return;
+      }
+
+      // Check Stripe subscription status
       const { data: subData } = await supabase.functions.invoke("check-subscription");
       if (subData?.subscribed) {
         setHasPurchased(true);

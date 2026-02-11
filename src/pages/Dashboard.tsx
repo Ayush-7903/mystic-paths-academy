@@ -115,6 +115,18 @@ const Dashboard = () => {
 
   const checkSubscription = async () => {
     try {
+      // Check PayPal membership first
+      const { data: paypalData } = await supabase.functions.invoke("paypal-check-subscription");
+      if (paypalData?.subscribed) {
+        setSubscription({
+          subscribed: true,
+          product_id: paypalData.tier || null,
+          subscription_end: paypalData.subscription_end || null,
+        });
+        return;
+      }
+
+      // Fallback to Stripe
       const { data, error } = await supabase.functions.invoke("check-subscription");
       if (error) throw error;
       setSubscription(data);
