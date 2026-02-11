@@ -17,12 +17,12 @@ const PAYPAL_BASE_URL = Deno.env.get("PAYPAL_MODE") === "live"
 
 const TIER_PRICES: Record<string, { amount: string; description: string; duration_days: number }> = {
   monthly: {
-    amount: "19.99",
+    amount: "29.99",
     description: "Guardian Codex Access - 1 Month",
     duration_days: 30,
   },
   yearly: {
-    amount: "199.99",
+    amount: "299.99",
     description: "Guardian Codex Access - 1 Year",
     duration_days: 365,
   },
@@ -125,7 +125,7 @@ serve(async (req) => {
         intent: "CAPTURE",
         purchase_units: [{
           amount: {
-            currency_code: "USD",
+            currency_code: "AUD",
             value: tierConfig.amount,
           },
           description: tierConfig.description,
