@@ -304,8 +304,8 @@ const Membership = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="text-center">
-                      <div className="text-5xl font-bold text-primary">$30</div>
-                      <p className="text-muted-foreground">AUD for 1 month</p>
+                      <div className="text-5xl font-bold text-primary">$19.99</div>
+                      <p className="text-muted-foreground">USD per month</p>
                     </div>
                     <ul className="space-y-3">
                       {MEMBERSHIP_FEATURES.map((feature, index) => (
@@ -339,7 +339,7 @@ const Membership = () => {
                 {/* Yearly Plan */}
                 <Card className="gradient-card shadow-elegant border-primary/40 relative overflow-hidden">
                   <div className="absolute top-0 right-0 bg-primary text-primary-foreground px-4 py-1 text-sm font-semibold rounded-bl-lg">
-                    Save $60
+                    Save $40
                   </div>
                   <CardHeader className="text-center pb-4">
                     <CardTitle className="text-2xl">Yearly Access</CardTitle>
@@ -347,9 +347,9 @@ const Membership = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="text-center">
-                      <div className="text-5xl font-bold text-primary">$300</div>
-                      <p className="text-muted-foreground">AUD for 1 year</p>
-                      <p className="text-sm text-primary mt-1">That's only $25/month!</p>
+                      <div className="text-5xl font-bold text-primary">$199.99</div>
+                      <p className="text-muted-foreground">USD per year</p>
+                      <p className="text-sm text-primary mt-1">That's only ~$16.67/month!</p>
                     </div>
                     <ul className="space-y-3">
                       {MEMBERSHIP_FEATURES.map((feature, index) => (
