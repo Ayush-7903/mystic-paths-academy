@@ -103,110 +103,75 @@ const Contact = () => {
         </div>
       </section>
 
-      {/* Contact Form Section */}
+      {/* Contact Form + Book a Call Side by Side */}
       <section id="contact-form" className="py-20 bg-gradient-to-b from-background to-primary/5">
         <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="text-center mb-12">
-              <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
-                <Heart className="w-3 h-3 mr-1" /> Reach Out
-              </Badge>
-              <h2 className="text-3xl md:text-4xl mb-4">Send Us a Message</h2>
-              <p className="text-muted-foreground text-lg">
-                Share your journey with us. Every message is read and answered with care.
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Contact Form */}
+            <div>
+              <div className="mb-8">
+                <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
+                  <Heart className="w-3 h-3 mr-1" /> Reach Out
+                </Badge>
+                <h2 className="text-3xl md:text-4xl mb-3">Send Us a Message</h2>
+                <p className="text-muted-foreground">
+                  Share your journey with us. Every message is read and answered with care.
+                </p>
+              </div>
+              <Card className="gradient-card p-8">
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name</Label>
+                    <Input id="name" name="name" placeholder="Your name" value={form.name} onChange={handleChange} maxLength={100} />
+                    {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" name="email" type="email" placeholder="your@email.com" value={form.email} onChange={handleChange} maxLength={255} />
+                    {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="manifestation">What are you trying to manifest?</Label>
+                    <Input id="manifestation" name="manifestation" placeholder="e.g., Inner peace, abundance, clarity..." value={form.manifestation} onChange={handleChange} maxLength={500} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="message">Message</Label>
+                    <Textarea id="message" name="message" placeholder="Tell us what's on your heart..." value={form.message} onChange={handleChange} rows={4} maxLength={5000} />
+                    {errors.message && <p className="text-sm text-destructive">{errors.message}</p>}
+                  </div>
+                  <Button type="submit" size="lg" className="w-full shadow-glow" disabled={isSubmitting}>
+                    {isSubmitting ? "Sending..." : "Send a Message"}
+                    <Send className="ml-2 w-4 h-4" />
+                  </Button>
+                </form>
+              </Card>
+            </div>
+
+            {/* Book a Call */}
+            <div>
+              <div className="mb-8">
+                <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
+                  <CalendarDays className="w-3 h-3 mr-1" /> Book a Call
+                </Badge>
+                <h2 className="text-3xl md:text-4xl mb-3">Let's Connect Personally</h2>
+                <p className="text-muted-foreground">
+                  Sometimes a conversation can shift everything. Schedule a free discovery call.
+                </p>
+              </div>
+              <div className="rounded-2xl overflow-hidden border shadow-soft bg-card">
+                <iframe
+                  src="https://calendly.com/ayushsh-zedplus/30min"
+                  width="100%"
+                  height="660"
+                  frameBorder="0"
+                  title="Schedule a call"
+                  className="w-full"
+                />
+              </div>
+              <p className="text-sm text-muted-foreground mt-4 text-center">
+                Can't find a suitable time? <a href="#contact-form" className="text-primary hover:underline">Send us a message</a> and we'll work something out.
               </p>
             </div>
-
-            <Card className="gradient-card p-8">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    placeholder="Your name"
-                    value={form.name}
-                    onChange={handleChange}
-                    maxLength={100}
-                  />
-                  {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={form.email}
-                    onChange={handleChange}
-                    maxLength={255}
-                  />
-                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="manifestation">What are you trying to manifest?</Label>
-                  <Input
-                    id="manifestation"
-                    name="manifestation"
-                    placeholder="e.g., Inner peace, abundance, clarity..."
-                    value={form.manifestation}
-                    onChange={handleChange}
-                    maxLength={500}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="message">Message</Label>
-                  <Textarea
-                    id="message"
-                    name="message"
-                    placeholder="Tell us what's on your heart..."
-                    value={form.message}
-                    onChange={handleChange}
-                    rows={5}
-                    maxLength={5000}
-                  />
-                  {errors.message && <p className="text-sm text-destructive">{errors.message}</p>}
-                </div>
-
-                <Button type="submit" size="lg" className="w-full shadow-glow" disabled={isSubmitting}>
-                  {isSubmitting ? "Sending..." : "Send a Message"}
-                  <Send className="ml-2 w-4 h-4" />
-                </Button>
-              </form>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Book a Call Section */}
-      <section className="py-20 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
-              <CalendarDays className="w-3 h-3 mr-1" /> Book a Call
-            </Badge>
-            <h2 className="text-3xl md:text-4xl mb-4">Let's Connect Personally</h2>
-            <p className="text-muted-foreground text-lg mb-8">
-              Sometimes a conversation can shift everything. Schedule a free discovery call and let's explore how we can support your journey.
-            </p>
-            <div className="rounded-2xl overflow-hidden border shadow-soft bg-card">
-              {/* Calendly Embed */}
-              <iframe
-                src="https://calendly.com/ayushsh-zedplus/30min"
-                width="100%"
-                height="700"
-                frameBorder="0"
-                title="Schedule a call"
-                className="w-full"
-              />
-            </div>
-            <p className="text-sm text-muted-foreground mt-4">
-              Can't find a suitable time? <a href="#contact-form" className="text-primary hover:underline">Send us a message</a> and we'll work something out.
-            </p>
           </div>
         </div>
       </section>
