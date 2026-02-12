@@ -49,6 +49,9 @@ export const Navbar = () => {
               <Crown className="w-4 h-4" />
               Membership
             </Link>
+            <Link to="/contact" className="text-foreground hover:text-primary transition-smooth">
+              Contact
+            </Link>
             {user && (
               <Link to="/dashboard" className="text-foreground hover:text-primary transition-smooth">
                 Dashboard
@@ -107,6 +110,13 @@ export const Navbar = () => {
             >
               <Crown className="w-4 h-4" />
               Membership
+            </Link>
+            <Link
+              to="/contact"
+              className="block text-foreground hover:text-primary transition-smooth"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Contact
             </Link>
             {user && (
               <Link
