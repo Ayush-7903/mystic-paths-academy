@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Send, CalendarDays, CalendarCheck, Phone, Mail } from "lucide-react";
+import { Send, CalendarDays, Phone, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
@@ -26,11 +26,11 @@ const contactCards = [
     actionLabel: "Schedule Now",
   },
   {
-    icon: CalendarCheck,
-    title: "Schedule a Meeting",
-    description: "Set up a detailed consultation to discuss your transformation journey.",
-    action: "https://calendly.com/ayushsh-zedplus/30min",
-    actionLabel: "Book Meeting",
+    icon: Mail,
+    title: "Email",
+    description: "Have a question? Email us and we'll get back to you soon.",
+    action: "mailto:ayushsh.zedplus@gmail.com",
+    actionLabel: "ayushsh.zedplus@gmail.com",
   },
   {
     icon: Phone,
@@ -38,13 +38,6 @@ const contactCards = [
     description: "For immediate assistance, reach out to us directly.",
     action: "tel:+1234567890",
     actionLabel: "+1 (234) 567-890",
-  },
-  {
-    icon: Mail,
-    title: "Email",
-    description: "Have a question? Email us and we'll get back to you soon.",
-    action: "mailto:ayushsh.zedplus@gmail.com",
-    actionLabel: "ayushsh.zedplus@gmail.com",
   },
 ];
 
@@ -122,10 +115,10 @@ const Contact = () => {
       {/* Main Two-Column Section */}
       <section className="py-16 bg-background">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-10 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-10 items-start">
 
-            {/* Left – Contact Cards (2/5 width) */}
-            <div className="lg:col-span-2 lg:sticky lg:top-24 space-y-5">
+            {/* Left – Contact Cards (1/4 width) */}
+            <div className="lg:col-span-1 lg:sticky lg:top-24 space-y-5">
               {contactCards.map((card) => (
                 <a
                   key={card.title}
@@ -146,7 +139,7 @@ const Contact = () => {
               ))}
             </div>
 
-            {/* Right – Contact Form (3/5 width) */}
+            {/* Right – Contact Form (3/4 width) */}
             <div className="lg:col-span-3">
               <h2 className="text-3xl md:text-4xl mb-2 text-foreground">Ready to get started?</h2>
               <p className="text-muted-foreground mb-8">Fill in the form and we'll be in touch shortly.</p>
