@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Crown } from "lucide-react";
+import { Crown, Youtube, Instagram } from "lucide-react";
 
 export const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -71,9 +71,17 @@ export const Footer = () => {
           </div>
         </div>
 
-        <div className="border-t pt-8 text-center text-muted-foreground">
+        <div className="border-t pt-8 flex flex-col items-center gap-4 text-muted-foreground">
+          <div className="flex items-center gap-4">
+            <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" aria-label="YouTube">
+              <Youtube className="w-5 h-5" />
+            </a>
+            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" aria-label="Instagram">
+              <Instagram className="w-5 h-5" />
+            </a>
+          </div>
           <p>&copy; {currentYear} Guardians of New Earth. All rights reserved.</p>
-          <p className="text-sm mt-2">
+          <p className="text-sm">
             Transforming lives through sacred wisdom and spiritual teachings.
           </p>
         </div>
