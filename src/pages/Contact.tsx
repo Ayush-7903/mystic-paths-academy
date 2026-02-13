@@ -3,26 +3,55 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Send, Sparkles, CalendarDays, Heart } from "lucide-react";
+import { Send, CalendarDays, CalendarCheck, Phone, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
 const contactSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(100, "Name must be under 100 characters"),
+  name: z.string().trim().min(1, "Name is required").max(100),
   email: z.string().trim().email("Please enter a valid email").max(255),
-  manifestation: z.string().trim().max(500).optional(),
-  message: z.string().trim().min(1, "Message is required").max(5000, "Message must be under 5000 characters"),
+  subject: z.string().trim().max(200).optional(),
+  message: z.string().trim().min(1, "Message is required").max(5000),
 });
+
+const contactCards = [
+  {
+    icon: CalendarDays,
+    title: "Book a Call",
+    description: "Book a call at a time that suits you and get expert guidance before you begin.",
+    action: "https://calendly.com/ayushsh-zedplus/30min",
+    actionLabel: "Schedule Now",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Schedule a Meeting",
+    description: "Set up a detailed consultation to discuss your transformation journey.",
+    action: "https://calendly.com/ayushsh-zedplus/30min",
+    actionLabel: "Book Meeting",
+  },
+  {
+    icon: Phone,
+    title: "Phone",
+    description: "For immediate assistance, reach out to us directly.",
+    action: "tel:+1234567890",
+    actionLabel: "+1 (234) 567-890",
+  },
+  {
+    icon: Mail,
+    title: "Email",
+    description: "Have a question? Email us and we'll get back to you soon.",
+    action: "mailto:ayushsh.zedplus@gmail.com",
+    actionLabel: "ayushsh.zedplus@gmail.com",
+  },
+];
 
 const Contact = () => {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", manifestation: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -46,17 +75,16 @@ const Contact = () => {
 
     setIsSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-contact-email", {
-        body: result.data,
+      const { error } = await supabase.functions.invoke("send-contact-email", {
+        body: { ...result.data, manifestation: result.data.subject },
       });
-
       if (error) throw error;
 
       toast({
         title: "Message sent ✨",
         description: "Thank you for reaching out. We'll get back to you soon.",
       });
-      setForm({ name: "", email: "", manifestation: "", message: "" });
+      setForm({ name: "", email: "", subject: "", message: "" });
     } catch (err) {
       console.error(err);
       toast({
@@ -75,102 +103,84 @@ const Contact = () => {
 
       {/* Hero Section */}
       <section
-        className="relative min-h-[60vh] flex items-center justify-center overflow-hidden pt-16"
+        className="relative min-h-[50vh] flex items-center justify-center overflow-hidden pt-16"
         style={{
-          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.6)), url('/images/hero-bg.jpg')`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundAttachment: "fixed",
+          backgroundImage: `linear-gradient(135deg, hsl(150 40% 45% / 0.15), hsl(45 85% 75% / 0.1), hsl(260 60% 70% / 0.08))`,
         }}
       >
-        <div className="absolute inset-0 gradient-hero"></div>
-        <div className="container mx-auto px-4 z-10 text-center">
-          <Badge className="mb-6 bg-primary/20 text-white border-primary/30 text-sm py-1.5 px-4">
-            <Sparkles className="w-4 h-4 mr-2" /> We're Listening
-          </Badge>
-          <h1 className="text-4xl md:text-6xl mb-6 text-white drop-shadow-lg">
-            The Universe Brought You Here for a Reason
+        <div className="absolute inset-0 gradient-hero opacity-60" />
+        <div className="container mx-auto px-4 z-10 text-center animate-in fade-in duration-700">
+          <h1 className="text-4xl md:text-6xl mb-4 text-foreground">
+            Let's Align Your Energy
           </h1>
-          <p className="text-xl md:text-2xl mb-8 text-white/90 max-w-2xl mx-auto">
-            Whether you're seeking guidance, ready to transform, or simply need someone to listen — we're here for you.
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+            Reach out to begin your manifestation journey with us.
           </p>
-          <a href="#contact-form">
-            <Button size="lg" className="shadow-glow text-lg px-8">
-              <Send className="mr-2 w-5 h-5" />
-              Send a Message
-            </Button>
-          </a>
         </div>
       </section>
 
-      {/* Contact Form + Book a Call Side by Side */}
-      <section id="contact-form" className="py-20 bg-gradient-to-b from-background to-primary/5">
+      {/* Main Two-Column Section */}
+      <section className="py-16 bg-background">
         <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            {/* Contact Form */}
-            <div>
-              <div className="mb-8">
-                <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
-                  <Heart className="w-3 h-3 mr-1" /> Reach Out
-                </Badge>
-                <h2 className="text-3xl md:text-4xl mb-3">Send Us a Message</h2>
-                <p className="text-muted-foreground">
-                  Share your journey with us. Every message is read and answered with care.
-                </p>
-              </div>
-              <Card className="gradient-card p-8">
-                <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-10 items-start">
+
+            {/* Left – Contact Cards (2/5 width) */}
+            <div className="lg:col-span-2 lg:sticky lg:top-24 space-y-5">
+              {contactCards.map((card) => (
+                <a
+                  key={card.title}
+                  href={card.action}
+                  target={card.action.startsWith("http") ? "_blank" : undefined}
+                  rel="noopener noreferrer"
+                  className="group block rounded-2xl border border-border/50 bg-card/60 backdrop-blur-md p-6 shadow-soft transition-all duration-300 hover:shadow-medium hover:-translate-y-1 hover:border-primary/30"
+                >
+                  <div className="flex flex-col items-center text-center gap-3">
+                    <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                      <card.icon className="w-7 h-7 text-primary" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-foreground font-sans">{card.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{card.description}</p>
+                    <span className="text-sm font-medium text-primary">{card.actionLabel}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+
+            {/* Right – Contact Form (3/5 width) */}
+            <div className="lg:col-span-3">
+              <h2 className="text-3xl md:text-4xl mb-2 text-foreground">Ready to get started?</h2>
+              <p className="text-muted-foreground mb-8">Fill in the form and we'll be in touch shortly.</p>
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
+                    <Label htmlFor="name">Name *</Label>
                     <Input id="name" name="name" placeholder="Your name" value={form.name} onChange={handleChange} maxLength={100} />
                     {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email *</Label>
                     <Input id="email" name="email" type="email" placeholder="your@email.com" value={form.email} onChange={handleChange} maxLength={255} />
                     {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="manifestation">What are you trying to manifest?</Label>
-                    <Input id="manifestation" name="manifestation" placeholder="e.g., Inner peace, abundance, clarity..." value={form.manifestation} onChange={handleChange} maxLength={500} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="message">Message</Label>
-                    <Textarea id="message" name="message" placeholder="Tell us what's on your heart..." value={form.message} onChange={handleChange} rows={4} maxLength={5000} />
-                    {errors.message && <p className="text-sm text-destructive">{errors.message}</p>}
-                  </div>
-                  <Button type="submit" size="lg" className="w-full shadow-glow" disabled={isSubmitting}>
-                    {isSubmitting ? "Sending..." : "Send a Message"}
-                    <Send className="ml-2 w-4 h-4" />
-                  </Button>
-                </form>
-              </Card>
-            </div>
+                </div>
 
-            {/* Book a Call */}
-            <div>
-              <div className="mb-8">
-                <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
-                  <CalendarDays className="w-3 h-3 mr-1" /> Book a Call
-                </Badge>
-                <h2 className="text-3xl md:text-4xl mb-3">Let's Connect Personally</h2>
-                <p className="text-muted-foreground">
-                  Sometimes a conversation can shift everything. Schedule a free discovery call.
-                </p>
-              </div>
-              <div className="rounded-2xl overflow-hidden border shadow-soft bg-card">
-                <iframe
-                  src="https://calendly.com/ayushsh-zedplus/30min"
-                  width="100%"
-                  height="660"
-                  frameBorder="0"
-                  title="Schedule a call"
-                  className="w-full"
-                />
-              </div>
-              <p className="text-sm text-muted-foreground mt-4 text-center">
-                Can't find a suitable time? <a href="#contact-form" className="text-primary hover:underline">Send us a message</a> and we'll work something out.
-              </p>
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject</Label>
+                  <Input id="subject" name="subject" placeholder="What is this regarding?" value={form.subject} onChange={handleChange} maxLength={200} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="message">Message *</Label>
+                  <Textarea id="message" name="message" placeholder="Tell us what's on your heart..." value={form.message} onChange={handleChange} rows={5} maxLength={5000} />
+                  {errors.message && <p className="text-sm text-destructive">{errors.message}</p>}
+                </div>
+
+                <Button type="submit" size="lg" className="shadow-glow" disabled={isSubmitting}>
+                  {isSubmitting ? "Sending..." : "Send Message"}
+                  <Send className="ml-2 w-4 h-4" />
+                </Button>
+              </form>
             </div>
           </div>
         </div>
