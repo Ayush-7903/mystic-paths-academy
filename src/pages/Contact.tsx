@@ -11,9 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
 const contactSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(100),
+  firstName: z.string().trim().min(1, "First name is required").max(50),
+  lastName: z.string().trim().min(1, "Last name is required").max(50),
   email: z.string().trim().email("Please enter a valid email").max(255),
-  subject: z.string().trim().max(200).optional(),
   message: z.string().trim().min(1, "Message is required").max(5000),
 });
 
@@ -44,7 +44,7 @@ const contactCards = [
 const Contact = () => {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", message: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -69,7 +69,7 @@ const Contact = () => {
     setIsSubmitting(true);
     try {
       const { error } = await supabase.functions.invoke("send-contact-email", {
-        body: { ...result.data, manifestation: result.data.subject },
+        body: { name: `${result.data.firstName} ${result.data.lastName}`, email: result.data.email, message: result.data.message },
       });
       if (error) throw error;
 
@@ -77,7 +77,7 @@ const Contact = () => {
         title: "Message sent ✨",
         description: "Thank you for reaching out. We'll get back to you soon.",
       });
-      setForm({ name: "", email: "", subject: "", message: "" });
+      setForm({ firstName: "", lastName: "", email: "", message: "" });
     } catch (err) {
       console.error(err);
       toast({
@@ -147,20 +147,21 @@ const Contact = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Name *</Label>
-                    <Input id="name" name="name" placeholder="Your name" value={form.name} onChange={handleChange} maxLength={100} />
-                    {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                    <Label htmlFor="firstName">First Name *</Label>
+                    <Input id="firstName" name="firstName" placeholder="First name" value={form.firstName} onChange={handleChange} maxLength={50} />
+                    {errors.firstName && <p className="text-sm text-destructive">{errors.firstName}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input id="email" name="email" type="email" placeholder="your@email.com" value={form.email} onChange={handleChange} maxLength={255} />
-                    {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                    <Label htmlFor="lastName">Last Name *</Label>
+                    <Input id="lastName" name="lastName" placeholder="Last name" value={form.lastName} onChange={handleChange} maxLength={50} />
+                    {errors.lastName && <p className="text-sm text-destructive">{errors.lastName}</p>}
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="subject">Subject</Label>
-                  <Input id="subject" name="subject" placeholder="What is this regarding?" value={form.subject} onChange={handleChange} maxLength={200} />
+                  <Label htmlFor="email">Email *</Label>
+                  <Input id="email" name="email" type="email" placeholder="your@email.com" value={form.email} onChange={handleChange} maxLength={255} />
+                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
 
                 <div className="space-y-2">
