@@ -118,7 +118,7 @@ const Contact = () => {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-10 items-start">
 
             {/* Left – Contact Cards (1/4 width) */}
-            <div className="lg:col-span-1 lg:sticky lg:top-24 space-y-5">
+            <div className="lg:col-span-1 lg:sticky lg:top-24 space-y-5 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2 scrollbar-thin">
               {contactCards.map((card) => (
                 <a
                   key={card.title}
