@@ -37,16 +37,6 @@ export const Navbar = () => {
             <span>Guardians of New Earth</span>
           </Link>
 
-          {/* Contact Icons */}
-          <div className="hidden md:flex items-center space-x-3 ml-4">
-            <a href="tel:+1234567890" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Call us">
-              <Phone className="w-4 h-4" />
-            </a>
-            <a href="mailto:info@guardiansofnewearth.com" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Email us">
-              <Mail className="w-4 h-4" />
-            </a>
-          </div>
-
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             <Link to="/" className="text-foreground hover:text-primary transition-smooth">
@@ -64,6 +54,14 @@ export const Navbar = () => {
                 Dashboard
               </Link>
             )}
+            <div className="flex items-center space-x-3 border-l border-border pl-6">
+              <a href="tel:+1234567890" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Call us">
+                <Phone className="w-4 h-4" />
+              </a>
+              <a href="mailto:info@guardiansofnewearth.com" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Email us">
+                <Mail className="w-4 h-4" />
+              </a>
+            </div>
           </div>
 
           {/* Desktop Auth Buttons */}
