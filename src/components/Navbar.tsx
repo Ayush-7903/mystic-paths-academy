@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
-import { Menu, X, Crown, Mail, Phone } from "lucide-react";
+import { Menu, X, Crown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export const Navbar = () => {
@@ -49,9 +49,6 @@ export const Navbar = () => {
               <Crown className="w-4 h-4" />
               Membership
             </Link>
-            <Link to="/contact" className="text-foreground hover:text-primary transition-smooth">
-              Contact
-            </Link>
             {user && (
               <Link to="/dashboard" className="text-foreground hover:text-primary transition-smooth">
                 Dashboard
@@ -61,12 +58,6 @@ export const Navbar = () => {
 
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <a href="mailto:ayushsh.zedplus@gmail.com" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Email">
-              <Mail className="w-5 h-5" />
-            </a>
-            <a href="tel:+1234567890" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Phone">
-              <Phone className="w-5 h-5" />
-            </a>
             {user ? (
               <Button onClick={handleSignOut} variant="outline">
                 Sign Out
@@ -116,13 +107,6 @@ export const Navbar = () => {
             >
               <Crown className="w-4 h-4" />
               Membership
-            </Link>
-            <Link
-              to="/contact"
-              className="block text-foreground hover:text-primary transition-smooth"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Contact
             </Link>
             {user && (
               <Link

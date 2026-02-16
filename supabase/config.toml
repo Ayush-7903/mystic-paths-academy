@@ -61,6 +61,3 @@ verify_jwt = false
 
 [functions.paypal-webhook]
 verify_jwt = false
-
-[functions.send-contact-email]
-verify_jwt = false

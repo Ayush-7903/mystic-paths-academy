@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ArrowRight, BookOpen, Users, Award, Star, CheckCircle, Sparkles, Crown, Shield, RefreshCw } from "lucide-react";
-import ContactSection from "@/components/home/ContactSection";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Course {
@@ -185,9 +184,6 @@ const Home = () => {
           </div>
         </div>
       </section>
-
-      {/* Contact Us Section */}
-      <ContactSection />
 
       {/* Featured Courses */}
       {featuredCourses.length > 0 && (
