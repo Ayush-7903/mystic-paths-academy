@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
-import { Menu, X, Crown } from "lucide-react";
+import { Menu, X, Crown, Phone, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export const Navbar = () => {
@@ -36,6 +36,16 @@ export const Navbar = () => {
             <img src="/logo.webp" alt="Guardians of New Earth" className="w-8 h-8" />
             <span>Guardians of New Earth</span>
           </Link>
+
+          {/* Contact Icons */}
+          <div className="hidden md:flex items-center space-x-3 ml-4">
+            <a href="tel:+1234567890" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Call us">
+              <Phone className="w-4 h-4" />
+            </a>
+            <a href="mailto:info@guardiansofnewearth.com" className="text-muted-foreground hover:text-primary transition-smooth" aria-label="Email us">
+              <Mail className="w-4 h-4" />
+            </a>
+          </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
