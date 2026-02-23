@@ -5,7 +5,9 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Check, Sparkles, Shield, BookOpen, RefreshCw, Crown, AlertCircle } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Loader2, Check, Sparkles, Shield, BookOpen, RefreshCw, Crown, AlertCircle, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "@supabase/supabase-js";
@@ -34,6 +36,7 @@ const Membership = () => {
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [processingTier, setProcessingTier] = useState<"monthly" | "yearly" | null>(null);
+  const [paymentGateway, setPaymentGateway] = useState<"paypal" | "stripe">("stripe");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,14 +59,20 @@ const Membership = () => {
     return () => authSub.unsubscribe();
   }, []);
 
-  // Handle payment status from URL (return from PayPal)
+  // Handle payment status from URL (return from PayPal or Stripe)
   useEffect(() => {
     const payment = searchParams.get("payment");
     const token = searchParams.get("token"); // PayPal order ID
     const tierParam = searchParams.get("tier");
+    const gateway = searchParams.get("gateway");
+    const sessionId = searchParams.get("session_id");
 
-    if (payment === "success" && token && tierParam) {
-      // Capture the order
+    if (payment === "success" && gateway === "stripe" && sessionId && tierParam) {
+      // Stripe return - verify and activate
+      activateStripe(sessionId, tierParam);
+      navigate("/membership", { replace: true });
+    } else if (payment === "success" && token && tierParam) {
+      // PayPal return - capture the order
       captureOrder(token, tierParam);
       navigate("/membership", { replace: true });
     } else if (payment === "cancelled") {
@@ -137,6 +146,33 @@ const Membership = () => {
     }
   };
 
+  const activateStripe = async (sessionId: string, tier: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("stripe-activate-membership", {
+        body: { sessionId, tier },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast({
+          title: "Payment successful!",
+          description: "Welcome to the Guardian Codex. Enjoy your access!",
+        });
+        await checkSubscription();
+      } else {
+        throw new Error("Stripe payment verification failed");
+      }
+    } catch (error) {
+      console.error("Error verifying Stripe payment:", error);
+      toast({
+        title: "Payment verification failed",
+        description: "Please contact support if your payment was processed.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handlePurchase = async (tier: "monthly" | "yearly") => {
     if (!user) {
       navigate("/auth");
@@ -146,33 +182,51 @@ const Membership = () => {
     setProcessingTier(tier);
 
     try {
-      const { data, error } = await supabase.functions.invoke("paypal-create-subscription", {
-        body: { tier },
-      });
+      if (paymentGateway === "stripe") {
+        // Stripe flow
+        const { data, error } = await supabase.functions.invoke("create-subscription-checkout", {
+          body: { tier },
+        });
 
-      if (error) {
-        const errorMessage = error.message || "";
-        if (errorMessage.includes("already have an active membership")) {
-          await checkSubscription();
-          toast({
-            title: "Already Active",
-            description: "You already have an active membership.",
-          });
-          setProcessingTier(null);
-          return;
+        if (error) {
+          const errorMessage = error.message || "";
+          if (errorMessage.includes("already have an active")) {
+            await checkSubscription();
+            toast({ title: "Already Active", description: "You already have an active membership." });
+            setProcessingTier(null);
+            return;
+          }
+          throw error;
         }
-        throw error;
-      }
 
-      if (!data.approvalUrl) {
-        throw new Error("Failed to create PayPal order. Please try again.");
-      }
+        if (!data.url) {
+          throw new Error("Failed to create Stripe checkout. Please try again.");
+        }
 
-      // Redirect to PayPal for payment
-      // Append tier to return URL so we know which tier to activate
-      const approvalUrl = new URL(data.approvalUrl);
-      // We'll pass tier via the return URL instead
-      window.location.href = data.approvalUrl;
+        window.location.href = data.url;
+      } else {
+        // PayPal flow (existing)
+        const { data, error } = await supabase.functions.invoke("paypal-create-subscription", {
+          body: { tier },
+        });
+
+        if (error) {
+          const errorMessage = error.message || "";
+          if (errorMessage.includes("already have an active membership")) {
+            await checkSubscription();
+            toast({ title: "Already Active", description: "You already have an active membership." });
+            setProcessingTier(null);
+            return;
+          }
+          throw error;
+        }
+
+        if (!data.approvalUrl) {
+          throw new Error("Failed to create PayPal order. Please try again.");
+        }
+
+        window.location.href = data.approvalUrl;
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to start checkout";
       toast({
@@ -291,10 +345,34 @@ const Membership = () => {
           </section>
         )}
 
-        {/* Pricing Cards - show when not subscribed or expired */}
+        {/* Payment Method Selection + Pricing Cards */}
         {(!subscription?.subscribed || isExpired) && (
           <section className="py-12">
             <div className="container mx-auto px-4">
+              {/* Payment Method Selector */}
+              <div className="max-w-md mx-auto mb-10">
+                <p className="text-center text-sm text-muted-foreground mb-3">Choose payment method</p>
+                <RadioGroup
+                  value={paymentGateway}
+                  onValueChange={(v) => setPaymentGateway(v as "stripe" | "paypal")}
+                  className="flex justify-center gap-6"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="stripe" id="stripe" />
+                    <Label htmlFor="stripe" className="flex items-center gap-1.5 cursor-pointer">
+                      <CreditCard className="w-4 h-4" />
+                      Card (Stripe)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="paypal" id="paypal" />
+                    <Label htmlFor="paypal" className="cursor-pointer">
+                      PayPal
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
               <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
                 {/* Monthly Plan */}
                 <Card className="gradient-card shadow-medium border-primary/20 relative overflow-hidden">
@@ -324,11 +402,11 @@ const Membership = () => {
                       {processingTier === "monthly" ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Redirecting to PayPal...
+                          Redirecting to {paymentGateway === "stripe" ? "Stripe" : "PayPal"}...
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4 mr-2" />
+                          {paymentGateway === "stripe" ? <CreditCard className="w-4 h-4 mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
                           {isExpired ? "Renew Monthly" : "Get Monthly Access"}
                         </>
                       )}
@@ -368,31 +446,15 @@ const Membership = () => {
                       {processingTier === "yearly" ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Redirecting to PayPal...
+                          Redirecting to {paymentGateway === "stripe" ? "Stripe" : "PayPal"}...
                         </>
                       ) : (
                         <>
-                          <Crown className="w-4 h-4 mr-2" />
+                          {paymentGateway === "stripe" ? <CreditCard className="w-4 h-4 mr-2" /> : <Crown className="w-4 h-4 mr-2" />}
                           {isExpired ? "Renew Yearly" : "Get Yearly Access"}
                         </>
                       )}
                     </Button>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Sandbox Notice */}
-              <div className="max-w-2xl mx-auto mt-8">
-                <Card className="border-amber-500/30 bg-amber-500/5">
-                  <CardContent className="flex items-start gap-3 p-4">
-                    <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-muted-foreground">
-                      <p className="font-medium text-amber-500 mb-1">PayPal Sandbox Mode</p>
-                      <p>
-                        This integration is running in PayPal sandbox (test) mode. 
-                        Use sandbox test accounts to make payments.
-                      </p>
-                    </div>
                   </CardContent>
                 </Card>
               </div>

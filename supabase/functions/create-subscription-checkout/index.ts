@@ -92,8 +92,8 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
-      success_url: `${origin}/dashboard?subscription=success`,
-      cancel_url: `${origin}/membership?subscription=cancelled`,
+      success_url: `${origin}/membership?payment=success&gateway=stripe&tier=${tier}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/membership?payment=cancelled`,
       metadata: {
         userId: user.id,
         tier,

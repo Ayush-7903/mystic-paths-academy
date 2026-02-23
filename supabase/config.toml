@@ -61,3 +61,6 @@ verify_jwt = false
 
 [functions.paypal-webhook]
 verify_jwt = false
+
+[functions.stripe-activate-membership]
+verify_jwt = false
