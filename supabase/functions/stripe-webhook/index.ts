@@ -12,6 +12,44 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
 };
 
+const PRODUCT_TO_TIER: Record<string, string> = {
+  "prod_Tnjncvsndg2NYh": "monthly",
+  "prod_TnjoM6SQJKQxSI": "yearly",
+};
+
+async function findUserByEmail(supabaseAdmin: ReturnType<typeof createClient>, email: string) {
+  const { data: users } = await supabaseAdmin.auth.admin.listUsers();
+  return users?.users?.find(u => u.email === email) ?? null;
+}
+
+async function updateMembershipFromSubscription(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  subscription: Stripe.Subscription,
+  isActive: boolean
+) {
+  if (!isActive) {
+    await supabaseAdmin.from("profiles").update({ is_member: false, membership_expires_at: null, membership_tier: null }).eq("id", userId);
+    logStep("Removed member status", { userId });
+    return;
+  }
+
+  const productId = subscription.items.data[0]?.price?.product as string;
+  const tier = PRODUCT_TO_TIER[productId] ?? "unknown";
+  const memberSince = new Date(subscription.start_date * 1000).toISOString();
+  const expiresAt = new Date(subscription.current_period_end * 1000).toISOString();
+
+  await supabaseAdmin.from("profiles").update({
+    is_member: true,
+    member_since: memberSince,
+    membership_expires_at: expiresAt,
+    membership_tier: tier,
+    paypal_subscription_id: `stripe_sub_${subscription.id}`,
+  }).eq("id", userId);
+
+  logStep("Updated membership", { userId, tier, expiresAt });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -44,69 +82,31 @@ serve(async (req) => {
       logStep("Processing webhook without signature verification");
     }
 
-    logStep(`Processing webhook event: ${event.type}`);
+    logStep(`Event: ${event.type}`);
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Handle subscription events
-    if (event.type === "customer.subscription.created" || event.type === "customer.subscription.updated") {
+    // Handle subscription created/updated (includes renewals)
+    if (
+      event.type === "customer.subscription.created" ||
+      event.type === "customer.subscription.updated"
+    ) {
       const subscription = event.data.object as Stripe.Subscription;
       const customerId = subscription.customer as string;
-      
-      logStep("Processing subscription event", { 
-        subscriptionId: subscription.id, 
-        status: subscription.status,
-        customerId 
-      });
+      logStep("Subscription event", { subscriptionId: subscription.id, status: subscription.status, customerId });
 
-      // Get customer email
       const customer = await stripe.customers.retrieve(customerId);
-      if (customer.deleted) {
-        logStep("Customer was deleted");
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
+      if (customer.deleted || !customer.email) {
+        return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
       }
 
-      const email = customer.email;
-      if (!email) {
-        logStep("Customer has no email");
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      }
-
-      // Find user by email
-      const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-      const user = users?.users?.find(u => u.email === email);
-      
-      if (!user) {
-        logStep("No user found with email", { email });
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      }
-
-      // Update profile based on subscription status
-      const isActive = subscription.status === "active" || subscription.status === "trialing";
-      const { error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .update({ 
-          is_member: isActive,
-          member_since: isActive ? new Date(subscription.start_date * 1000).toISOString() : null
-        })
-        .eq("id", user.id);
-
-      if (profileError) {
-        logStep("Error updating profile", { error: profileError.message });
-      } else {
-        logStep("Profile updated", { userId: user.id, isMember: isActive });
+      const user = await findUserByEmail(supabaseAdmin, customer.email);
+      if (user) {
+        const isActive = subscription.status === "active" || subscription.status === "trialing";
+        await updateMembershipFromSubscription(supabaseAdmin, user.id, subscription, isActive);
       }
     }
 
@@ -114,83 +114,70 @@ serve(async (req) => {
     if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object as Stripe.Subscription;
       const customerId = subscription.customer as string;
-      
-      logStep("Processing subscription deletion", { subscriptionId: subscription.id, customerId });
+      logStep("Subscription deleted", { subscriptionId: subscription.id, customerId });
 
       const customer = await stripe.customers.retrieve(customerId);
-      if (customer.deleted) {
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
+      if (customer.deleted || !customer.email) {
+        return new Response(JSON.stringify({ received: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
       }
 
-      const email = customer.email;
-      if (!email) {
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      }
-
-      const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-      const user = users?.users?.find(u => u.email === email);
-      
+      const user = await findUserByEmail(supabaseAdmin, customer.email);
       if (user) {
-        await supabaseAdmin
-          .from("profiles")
-          .update({ is_member: false })
-          .eq("id", user.id);
-        logStep("Removed member status", { userId: user.id });
+        await updateMembershipFromSubscription(supabaseAdmin, user.id, subscription, false);
       }
     }
 
-    // Keep legacy support for one-time course purchases
+    // Handle invoice.paid - this fires on every successful renewal payment
+    if (event.type === "invoice.paid") {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId = invoice.subscription as string;
+
+      if (subscriptionId) {
+        logStep("Invoice paid for subscription renewal", { subscriptionId, invoiceId: invoice.id });
+
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const customerId = subscription.customer as string;
+        const customer = await stripe.customers.retrieve(customerId);
+
+        if (!customer.deleted && customer.email) {
+          const user = await findUserByEmail(supabaseAdmin, customer.email);
+          if (user) {
+            await updateMembershipFromSubscription(supabaseAdmin, user.id, subscription, true);
+            logStep("Membership renewed via invoice.paid", { userId: user.id });
+          }
+        }
+      }
+    }
+
+    // Handle payment failure - notify but don't immediately revoke
+    if (event.type === "invoice.payment_failed") {
+      const invoice = event.data.object as Stripe.Invoice;
+      logStep("Payment failed", { invoiceId: invoice.id, subscriptionId: invoice.subscription });
+      // Stripe will retry per your retry settings. Subscription status changes to 
+      // "past_due" which will be caught by subscription.updated event above.
+    }
+
+    // Legacy: one-time course purchases
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      
-      // Only process one-time payments (legacy course purchases)
       if (session.mode === "payment") {
         const courseId = session.metadata?.courseId;
         const userId = session.metadata?.userId;
-        
         if (courseId && userId) {
-          logStep("Recording legacy course purchase", { userId, courseId });
+          logStep("Legacy course purchase", { userId, courseId });
+          await supabaseAdmin.from("purchases").upsert({
+            user_id: userId, course_id: courseId,
+            stripe_checkout_session_id: session.id,
+            stripe_payment_intent_id: session.payment_intent as string,
+            amount_cents: session.amount_total || 0,
+            currency: session.currency || 'usd',
+            status: 'completed',
+            purchased_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,course_id' });
 
-          const { error: purchaseError } = await supabaseAdmin
-            .from("purchases")
-            .upsert({
-              user_id: userId,
-              course_id: courseId,
-              stripe_checkout_session_id: session.id,
-              stripe_payment_intent_id: session.payment_intent as string,
-              amount_cents: session.amount_total || 0,
-              currency: session.currency || 'usd',
-              status: 'completed',
-              purchased_at: new Date().toISOString(),
-            }, {
-              onConflict: 'user_id,course_id',
-            });
-
-          if (purchaseError) {
-            logStep("Error recording purchase", { error: purchaseError.message });
-          }
-
-          const { error: enrollError } = await supabaseAdmin
-            .from("enrollments")
-            .upsert({
-              user_id: userId,
-              course_id: courseId,
-              progress: 0,
-            }, {
-              onConflict: 'user_id,course_id',
-            });
-
-          if (enrollError) {
-            logStep("Error enrolling user", { error: enrollError.message });
-          }
-
-          logStep("Successfully processed legacy purchase", { userId, courseId });
+          await supabaseAdmin.from("enrollments").upsert({
+            user_id: userId, course_id: courseId, progress: 0,
+          }, { onConflict: 'user_id,course_id' });
         }
       }
     }

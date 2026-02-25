@@ -12,8 +12,7 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
   console.log(`[CHECK-SUBSCRIPTION] ${step}${detailsStr}`);
 };
 
-// Subscription tiers configuration
-const SUBSCRIPTION_TIERS = {
+const SUBSCRIPTION_TIERS: Record<string, { product_id: string; price_id: string; name: string; price_aud: number }> = {
   monthly: {
     product_id: "prod_Tnjncvsndg2NYh",
     price_id: "price_1Sq8KF1wrLc5KSQBVniYUJfA",
@@ -44,15 +43,11 @@ serve(async (req) => {
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
-    logStep("Stripe key verified");
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header provided");
-    logStep("Authorization header found");
 
     const token = authHeader.replace("Bearer ", "");
-    logStep("Authenticating user with token");
-    
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError) throw new Error(`Authentication error: ${userError.message}`);
     const user = userData.user;
@@ -64,11 +59,7 @@ serve(async (req) => {
     
     if (customers.data.length === 0) {
       logStep("No customer found, returning unsubscribed state");
-      return new Response(JSON.stringify({ 
-        subscribed: false,
-        tier: null,
-        subscription_end: null 
-      }), {
+      return new Response(JSON.stringify({ subscribed: false, tier: null, subscription_end: null }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
@@ -89,27 +80,19 @@ serve(async (req) => {
 
     if (hasActiveSub) {
       const subscription = subscriptions.data[0];
-      logStep("Processing subscription", { 
-        subscriptionId: subscription.id, 
-        currentPeriodEnd: subscription.current_period_end,
-        created: subscription.created
-      });
-      
-      // Safely parse subscription end date
+      logStep("Active subscription found", { subscriptionId: subscription.id });
+
+      // Get real expiry from Stripe (auto-renewed by Stripe)
       try {
         if (subscription.current_period_end && typeof subscription.current_period_end === 'number') {
           subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
         }
       } catch (dateError) {
         logStep("Error parsing current_period_end", { error: String(dateError) });
-        subscriptionEnd = null;
       }
-      
-      logStep("Active subscription found", { subscriptionId: subscription.id, endDate: subscriptionEnd });
       
       const productId = subscription.items.data[0]?.price?.product as string;
       
-      // Determine tier based on product ID
       if (productId === SUBSCRIPTION_TIERS.monthly.product_id) {
         tier = "monthly";
       } else if (productId === SUBSCRIPTION_TIERS.yearly.product_id) {
@@ -117,9 +100,8 @@ serve(async (req) => {
       } else {
         tier = "unknown";
       }
-      logStep("Determined subscription tier", { tier, productId });
+      logStep("Determined tier", { tier, productId, subscriptionEnd });
       
-      // Safely parse member_since date
       let memberSince: string = new Date().toISOString();
       try {
         const startTimestamp = subscription.start_date ?? subscription.created;
@@ -130,36 +112,32 @@ serve(async (req) => {
         logStep("Error parsing member_since date", { error: String(dateError) });
       }
       
-      // Update the profiles table to mark user as member
+      // Sync profile with Stripe's real subscription data
       await supabaseClient
         .from("profiles")
         .update({ 
           is_member: true, 
-          member_since: memberSince
+          member_since: memberSince,
+          membership_expires_at: subscriptionEnd,
+          membership_tier: tier,
         })
         .eq("id", user.id);
-      logStep("Updated profile to member status");
+      logStep("Profile synced with Stripe subscription");
     } else {
       logStep("No active subscription found");
-      
-      // Update profile to remove member status
       await supabaseClient
         .from("profiles")
-        .update({ is_member: false })
+        .update({ is_member: false, membership_expires_at: null, membership_tier: null })
         .eq("id", user.id);
     }
 
-    return new Response(JSON.stringify({
-      subscribed: hasActiveSub,
-      tier,
-      subscription_end: subscriptionEnd
-    }), {
+    return new Response(JSON.stringify({ subscribed: hasActiveSub, tier, subscription_end: subscriptionEnd }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR in check-subscription", { message: errorMessage });
+    logStep("ERROR", { message: errorMessage });
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,

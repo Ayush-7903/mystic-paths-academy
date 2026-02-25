@@ -12,11 +12,6 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
   console.log(`[STRIPE-ACTIVATE-MEMBERSHIP] ${step}${detailsStr}`);
 };
 
-const TIER_DURATIONS: Record<string, number> = {
-  monthly: 30,
-  yearly: 365,
-};
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,7 +23,7 @@ serve(async (req) => {
     const { sessionId, tier } = await req.json();
 
     if (!sessionId) throw new Error("Missing sessionId");
-    if (!tier || !TIER_DURATIONS[tier]) throw new Error("Invalid tier");
+    if (!tier) throw new Error("Missing tier");
 
     logStep("Verifying session", { sessionId, tier });
 
@@ -48,32 +43,43 @@ serve(async (req) => {
 
     logStep("User authenticated", { userId: user.id });
 
-    // Verify the Stripe checkout session
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
     });
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["subscription"],
+    });
     logStep("Session retrieved", { status: session.payment_status, mode: session.mode });
 
     if (session.payment_status !== "paid") {
       throw new Error(`Payment not completed. Status: ${session.payment_status}`);
     }
 
-    // Calculate expiry date
-    const now = new Date();
-    const expiresAt = new Date(now);
-    expiresAt.setDate(expiresAt.getDate() + TIER_DURATIONS[tier]);
+    // Get the actual subscription from Stripe for real expiry dates
+    const subscription = session.subscription as Stripe.Subscription;
+    if (!subscription) {
+      throw new Error("No subscription found in checkout session");
+    }
 
-    // Update user profile
+    const memberSince = new Date(subscription.start_date * 1000).toISOString();
+    const expiresAt = new Date(subscription.current_period_end * 1000).toISOString();
+
+    logStep("Subscription details", {
+      subscriptionId: subscription.id,
+      status: subscription.status,
+      currentPeriodEnd: expiresAt,
+    });
+
+    // Update user profile with real Stripe subscription data
     const { error: updateError } = await supabaseClient
       .from("profiles")
       .update({
         is_member: true,
-        member_since: now.toISOString(),
-        membership_expires_at: expiresAt.toISOString(),
+        member_since: memberSince,
+        membership_expires_at: expiresAt,
         membership_tier: tier,
-        paypal_subscription_id: `stripe_${sessionId}`, // Store with prefix for identification
+        paypal_subscription_id: `stripe_sub_${subscription.id}`,
       })
       .eq("id", user.id);
 
@@ -82,13 +88,13 @@ serve(async (req) => {
       throw new Error(`Failed to update profile: ${updateError.message}`);
     }
 
-    logStep("Profile updated successfully", { expiresAt: expiresAt.toISOString() });
+    logStep("Profile updated successfully", { expiresAt });
 
     return new Response(JSON.stringify({
       success: true,
       subscribed: true,
       tier,
-      subscription_end: expiresAt.toISOString(),
+      subscription_end: expiresAt,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
